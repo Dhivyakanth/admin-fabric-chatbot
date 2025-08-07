@@ -1,0 +1,151 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Fashion-forward design system for dress company chatbot admin panel 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* Fashion-inspired primary palette */
+    --background: 0 0% 100%;
+    --foreground: 235 19% 15%;
+
+    /* Card and surface colors */
+    --card: 0 0% 100%;
+    --card-foreground: 235 19% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 235 19% 15%;
+
+    /* Fashion purple primary theme */
+    --primary: 275 85% 60%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 280 70% 75%;
+
+    /* Elegant secondary colors */
+    --secondary: 320 15% 95%;
+    --secondary-foreground: 235 19% 15%;
+
+    /* Muted fashion tones */
+    --muted: 315 10% 96%;
+    --muted-foreground: 235 10% 45%;
+
+    /* Accent colors for highlights */
+    --accent: 320 20% 92%;
+    --accent-foreground: 275 85% 50%;
+
+    /* Destructive states */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Borders and inputs */
+    --border: 320 10% 88%;
+    --input: 320 10% 88%;
+    --ring: 275 85% 60%;
+
+    /* Chat specific colors */
+    --chat-bubble-user: 275 85% 60%;
+    --chat-bubble-assistant: 315 10% 96%;
+    --chat-input: 0 0% 100%;
+
+    /* Fashion gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(275 85% 60%), hsl(320 70% 70%));
+    --gradient-secondary: linear-gradient(135deg, hsl(320 20% 95%), hsl(315 15% 98%));
+    --gradient-hero: linear-gradient(135deg, hsl(275 85% 60%) 0%, hsl(320 70% 70%) 50%, hsl(340 60% 80%) 100%);
+
+    /* Elegant shadows */
+    --shadow-elegant: 0 10px 30px -10px hsl(275 85% 60% / 0.2);
+    --shadow-soft: 0 4px 20px -5px hsl(320 50% 50% / 0.1);
+
+    /* Smooth transitions */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    /* Dark mode fashion theme */
+    --background: 235 25% 8%;
+    --foreground: 320 15% 95%;
+
+    --card: 235 20% 12%;
+    --card-foreground: 320 15% 95%;
+
+    --popover: 235 20% 12%;
+    --popover-foreground: 320 15% 95%;
+
+    /* Dark mode purple theme */
+    --primary: 280 70% 75%;
+    --primary-foreground: 235 25% 8%;
+    --primary-glow: 285 60% 65%;
+
+    --secondary: 235 15% 15%;
+    --secondary-foreground: 320 15% 90%;
+
+    --muted: 235 12% 18%;
+    --muted-foreground: 320 8% 65%;
+
+    --accent: 235 15% 20%;
+    --accent-foreground: 280 70% 75%;
+
+    --destructive: 0 75% 65%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 235 12% 22%;
+    --input: 235 12% 22%;
+    --ring: 280 70% 75%;
+
+    /* Dark chat colors */
+    --chat-bubble-user: 280 70% 75%;
+    --chat-bubble-assistant: 235 12% 18%;
+    --chat-input: 235 20% 12%;
+
+    /* Dark gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(280 70% 75%), hsl(320 60% 65%));
+    --gradient-secondary: linear-gradient(135deg, hsl(235 15% 15%), hsl(235 12% 18%));
+    --gradient-hero: linear-gradient(135deg, hsl(280 70% 75%) 0%, hsl(320 60% 65%) 50%, hsl(340 50% 70%) 100%);
+
+    /* Dark shadows */
+    --shadow-elegant: 0 10px 30px -10px hsl(280 70% 50% / 0.3);
+    --shadow-soft: 0 4px 20px -5px hsl(235 50% 10% / 0.4);
+
+    /* Sidebar dark theme */
+    --sidebar-background: 235 20% 10%;
+    --sidebar-foreground: 320 15% 90%;
+    --sidebar-primary: 280 70% 75%;
+    --sidebar-primary-foreground: 235 25% 8%;
+    --sidebar-accent: 235 15% 18%;
+    --sidebar-accent-foreground: 320 15% 90%;
+    --sidebar-border: 235 12% 22%;
+    --sidebar-ring: 280 70% 75%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
