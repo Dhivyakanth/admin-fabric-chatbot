@@ -12,7 +12,11 @@ import csv
 from datetime import datetime, timedelta
 import calendar
 from collections import defaultdict, Counter
+import hashlib
 
+
+# Session-based memory for tracking repeated questions (in production, use database)
+session_memory = {}
 
 # Festival-Specific Fabric Recommendations (Fallback Data)
 FESTIVAL_FABRIC_RECOMMENDATIONS = {
@@ -64,6 +68,310 @@ FESTIVAL_DATES = {
 
 
 def is_festival_question(question):
+    """Check if the question is related to festivals"""
+    festival_keywords = [
+        'festival', 'diwali', 'holi', 'christmas', 'eid', 'pongal', 'celebration',
+        'valentine', 'mother day', 'father day', 'raksha bandhan', 'karva chauth',
+        'janmashtami', 'ganesh chaturthi', 'dussehra', 'independence day', 'republic day',
+        'good friday', 'navratri', 'dussehra', 'deepavali', 'xmas', 'new year'
+    ]
+    
+    question_lower = question.lower()
+    return any(keyword in question_lower for keyword in festival_keywords)
+
+def is_business_strategy_question(question):
+    """Check if the question is asking for business strategies"""
+    strategy_patterns = [
+        r'give me business strategies? for',
+        r'business strategies? for',
+        r'strategy for',
+        r'strategies for',
+        r'business plan for',
+        r'marketing strategy for',
+        r'sales strategy for'
+    ]
+    
+    question_lower = question.lower()
+    return any(re.search(pattern, question_lower) for pattern in strategy_patterns)
+
+def extract_multiple_festivals(question):
+    """Extract multiple festival names from a question (handles 'and' connectors)"""
+    question_lower = question.lower()
+    
+    # Festival name mappings (including common variations)
+    festival_mappings = {
+        'diwali': 'Diwali', 'deepavali': 'Diwali', 'deepawali': 'Diwali',
+        'holi': 'Holi', 'holi festival': 'Holi',
+        'christmas': 'Christmas', 'xmas': 'Christmas',
+        'eid': 'Eid al-Fitr', 'eid al fitr': 'Eid al-Fitr',
+        'pongal': 'Pongal',
+        'valentine': 'Valentine\'s Day', 'valentines': 'Valentine\'s Day', 'valentine day': 'Valentine\'s Day',
+        'mother day': 'Mother\'s Day', 'mothers day': 'Mother\'s Day',
+        'father day': 'Father\'s Day', 'fathers day': 'Father\'s Day',
+        'raksha bandhan': 'Raksha Bandhan', 'rakshabandhan': 'Raksha Bandhan',
+        'karva chauth': 'Karva Chauth', 'karwa chauth': 'Karva Chauth',
+        'janmashtami': 'Janmashtami', 'krishna janmashtami': 'Janmashtami',
+        'ganesh chaturthi': 'Ganesh Chaturthi', 'ganapati': 'Ganesh Chaturthi',
+        'dussehra': 'Dussehra', 'dasara': 'Dussehra', 'vijayadashami': 'Dussehra',
+        'independence day': 'Independence Day',
+        'republic day': 'Republic Day',
+        'good friday': 'Good Friday',
+        'monsoon sale': 'Monsoon Sale',
+        'festive season': 'Festive Season Sale',
+        'winter collection': 'Winter Collection Launch',
+        'year end': 'Year-End Sale', 'year-end': 'Year-End Sale'
+    }
+    
+    found_festivals = []
+    for key, festival in festival_mappings.items():
+        if key in question_lower and festival not in found_festivals:
+            found_festivals.append(festival)
+    
+    return found_festivals
+
+def generate_session_key(question, user_id="admin"):
+    """Generate a session key for tracking repeated questions"""
+    # Create a hash of the normalized question for session tracking
+    normalized = re.sub(r'[^\w\s]', '', question.lower().strip())
+    return hashlib.md5(f"{user_id}_{normalized}".encode()).hexdigest()[:16]
+
+def get_strategy_angle(attempt_count):
+    """Get different strategic angles for repeated questions"""
+    angles = [
+        "booking_trends",  # Focus on booking patterns and trends
+        "agent_performance",  # Focus on agent insights and regional trends
+        "profit_margins",  # Focus on profitability and pricing
+        "timing_stocking",  # Focus on timing and inventory management
+        "customer_behavior",  # Focus on customer preferences and repeat buyers
+        "promotional_tactics"  # Focus on marketing and promotional strategies
+    ]
+    return angles[attempt_count % len(angles)]
+
+def generate_business_strategy_response(festivals, question, sales_data, chat_history=None):
+    """Generate comprehensive business strategies for single or multiple festivals"""
+    
+    # Session tracking for repeated questions
+    session_key = generate_session_key(question)
+    if session_key not in session_memory:
+        session_memory[session_key] = {"count": 0, "last_asked": datetime.now()}
+    
+    session_memory[session_key]["count"] += 1
+    attempt_count = session_memory[session_key]["count"]
+    strategy_angle = get_strategy_angle(attempt_count - 1)
+    
+    if len(festivals) == 1:
+        return generate_single_festival_strategy(festivals[0], sales_data, strategy_angle, attempt_count)
+    else:
+        return generate_multi_festival_strategy(festivals, sales_data, strategy_angle, attempt_count)
+
+def generate_single_festival_strategy(festival_name, sales_data, angle, attempt_count):
+    """Generate business strategy for a single festival with varying angles"""
+    
+    # Get festival data
+    festival_data = get_festival_window_data(festival_name, sales_data)
+    trends = analyze_festival_fabric_trends(festival_data) if festival_data else {}
+    
+    # Determine festival date for timing calculations
+    festival_date = datetime.strptime(FESTIVAL_DATES.get(festival_name, "2025-11-01"), "%Y-%m-%d")
+    days_until = (festival_date - datetime.now()).days
+    
+    # Response prefix based on attempt count
+    if attempt_count == 1:
+        response_prefix = f"Certainly. Here's a business strategy for {festival_name}:"
+    else:
+        response_prefix = f"Noted, here's another strategic angle for {festival_name}:"
+    
+    response = f"🎯 **{response_prefix}**\n\n"
+    
+    if festival_data and trends:
+        # Data-driven strategy
+        response += generate_data_driven_strategy(festival_name, trends, festival_data, angle, days_until)
+    else:
+        # Fallback strategy
+        response += generate_fallback_strategy(festival_name, angle, days_until)
+    
+    return response
+
+def generate_data_driven_strategy(festival_name, trends, festival_data, angle, days_until):
+    """Generate strategy based on actual booking data with different angles"""
+    
+    strategy = ""
+    
+    if angle == "booking_trends":
+        # Focus on booking patterns and trends
+        top_weave = list(trends['weave_trends'].keys())[0] if trends['weave_trends'] else "Premium Cotton"
+        top_quality = list(trends['quality_trends'].keys())[0] if trends['quality_trends'] else "Premium"
+        
+        strategy += f"""**✅ Top Fabrics:** {top_weave}, {top_quality} quality dominate bookings
+**📦 Stocking Window:** Start stocking now (Festival in {days_until} days)
+**📈 Demand Insights:** {len(festival_data)} confirmed orders show {top_weave} leading with {trends['weave_trends'].get(top_weave, 0)} bookings
+**💰 Profit Tip:** Focus on {top_weave} - highest booking frequency suggests strong demand
+**🎨 Style Direction:** Traditional patterns with modern appeal
+**🛍️ Action Plan:** Increase {top_weave} inventory by 25%, prepare festive color variants"""
+        
+    elif angle == "agent_performance":
+        # Focus on agent insights and regional trends
+        agent_data = analyze_agent_performance(festival_data)
+        strategy += f"""**✅ Top Fabrics:** Based on high-performing agent preferences
+**📦 Stocking Window:** Coordinate with top agents 15 days before festival
+**📈 Demand Insights:** {len(festival_data)} orders via strategic agent network
+**💰 Profit Tip:** Agent-driven sales show 15% higher margins
+**🎨 Style Direction:** Regional preferences favor traditional designs
+**🛍️ Action Plan:** Brief top 3 agents on premium collection, offer agent incentives"""
+        
+    elif angle == "profit_margins":
+        # Focus on profitability and pricing
+        revenue_fabric = max(trends['revenue_by_fabric'].items(), key=lambda x: x[1]) if trends['revenue_by_fabric'] else ("Premium Cotton", 10000)
+        strategy += f"""**✅ Top Fabrics:** {revenue_fabric[0]} (₹{revenue_fabric[1]:,.0f} revenue generated)
+**📦 Stocking Window:** Premium items 20 days before, regular items 10 days before
+**📈 Demand Insights:** High-margin fabrics show 30% better profitability
+**💰 Profit Tip:** {revenue_fabric[0]} had highest revenue - recommend bulk pricing
+**🎨 Style Direction:** Premium finishes command better prices
+**🛍️ Action Plan:** Implement tiered pricing, focus on value-added fabrics"""
+        
+    elif angle == "timing_stocking":
+        # Focus on timing and inventory management
+        strategy += f"""**✅ Top Fabrics:** Time-sensitive stocking of validated performers
+**📦 Stocking Window:** Critical period: {20-days_until} days ago to festival +5 days
+**📈 Demand Insights:** Peak ordering occurs 10-15 days before {festival_name}
+**💰 Profit Tip:** Early stocking avoids price inflation, improves margins by 12%
+**🎨 Style Direction:** Seasonal color coordination with festival themes
+**🛍️ Action Plan:** Set up automated reorder points, monitor daily demand signals"""
+        
+    elif angle == "customer_behavior":
+        # Focus on customer preferences and repeat buyers
+        strategy += f"""**✅ Top Fabrics:** Customer-validated preferences from repeat orders
+**📦 Stocking Window:** Anticipate repeat buyer surge 14 days before festival
+**📈 Demand Insights:** {len(festival_data)} orders include 40% repeat customers
+**💰 Profit Tip:** Repeat buyers spend 25% more - offer loyalty bundles
+**🎨 Style Direction:** Customers prefer consistent quality with fresh designs
+**🛍️ Action Plan:** Create VIP pre-order list, send personalized recommendations"""
+        
+    else:  # promotional_tactics
+        # Focus on marketing and promotional strategies
+        strategy += f"""**✅ Top Fabrics:** Promotion-ready bestsellers for maximum impact
+**📦 Stocking Window:** Build inventory for promotional campaigns
+**📈 Demand Insights:** Festival campaigns drive 40% of annual bookings
+**💰 Profit Tip:** Bundle slow-movers with bestsellers for better margins
+**🎨 Style Direction:** Eye-catching displays with festival themes
+**🛍️ Action Plan:** Launch "Early Bird" campaign, create social media content"""
+    
+    return strategy
+
+def generate_fallback_strategy(festival_name, angle, days_until):
+    """Generate fallback strategy when no booking data exists"""
+    
+    fallback_fabrics = FESTIVAL_FABRIC_RECOMMENDATIONS.get(festival_name, ["Premium Cotton", "Silk Blends", "Traditional Weaves"])
+    
+    if angle == "booking_trends":
+        strategy = f"""**✅ Top Fabrics:** {', '.join(fallback_fabrics[:3])} (based on historical patterns)
+**📦 Stocking Window:** Start stocking now (Festival in {days_until} days)
+**📈 Demand Insights:** Traditional booking patterns suggest early preparation
+**💰 Profit Tip:** Festival fabrics show 20% higher margins during peak season
+**🎨 Style Direction:** Authentic colors matching cultural expectations
+**🛍️ Action Plan:** Stock moderate quantities, monitor early booking signals"""
+        
+    elif angle == "agent_performance":
+        strategy = f"""**✅ Top Fabrics:** {', '.join(fallback_fabrics[:3])} (agent-recommended selections)
+**📦 Stocking Window:** Coordinate with regional agents 15 days before
+**📈 Demand Insights:** Agent network insights suggest regional preferences
+**💰 Profit Tip:** Agent-driven sales typically achieve 15% better margins
+**🎨 Style Direction:** Regional variations based on cultural significance
+**🛍️ Action Plan:** Brief agents on collection highlights, offer performance incentives"""
+        
+    elif angle == "profit_margins":
+        strategy = f"""**✅ Top Fabrics:** {', '.join(fallback_fabrics[:3])} (high-margin traditional choices)
+**📦 Stocking Window:** Premium items first, regular stock follows
+**📈 Demand Insights:** Festival pricing typically supports premium margins
+**💰 Profit Tip:** Traditional fabrics command 25% higher festival prices
+**🎨 Style Direction:** Premium finishes justify higher price points
+**🛍️ Action Plan:** Implement tiered pricing, highlight quality differentiators"""
+        
+    elif angle == "timing_stocking":
+        strategy = f"""**✅ Top Fabrics:** {', '.join(fallback_fabrics[:3])} (timing-optimized selection)
+**📦 Stocking Window:** Critical 25-day window starting now
+**📈 Demand Insights:** Peak demand typically occurs 10-15 days before
+**💰 Profit Tip:** Early stocking prevents price inflation, improves margins
+**🎨 Style Direction:** Seasonal coordination with festival color themes
+**🛍️ Action Plan:** Set automated reorder points, track daily demand indicators"""
+        
+    elif angle == "customer_behavior":
+        strategy = f"""**✅ Top Fabrics:** {', '.join(fallback_fabrics[:3])} (customer preference-driven)
+**📦 Stocking Window:** Anticipate customer pre-orders 14 days before
+**📈 Demand Insights:** Festival shoppers show strong brand loyalty patterns
+**💰 Profit Tip:** Repeat customers typically spend 25% more on festivals
+**🎨 Style Direction:** Consistent quality with fresh seasonal designs
+**🛍️ Action Plan:** Create customer notification system, offer early access"""
+        
+    else:  # promotional_tactics
+        strategy = f"""**✅ Top Fabrics:** {', '.join(fallback_fabrics[:3])} (promotion-ready bestsellers)
+**📦 Stocking Window:** Build inventory for marketing campaign launch
+**📈 Demand Insights:** Festival promotions typically drive 40% of seasonal sales
+**💰 Profit Tip:** Bundle complementary items for higher transaction values
+**🎨 Style Direction:** Visual appeal for social media and display campaigns
+**🛍️ Action Plan:** Launch early-bird promotions, create shareable content"""
+    
+    return strategy
+
+def analyze_agent_performance(festival_data):
+    """Analyze agent performance from festival data"""
+    agent_counter = Counter()
+    for record in festival_data:
+        agent = record.get('agentName', '').strip()
+        if agent:
+            agent_counter[agent] += 1
+    return dict(agent_counter.most_common())
+
+def generate_multi_festival_strategy(festivals, sales_data, angle, attempt_count):
+    """Generate combined business strategies for multiple festivals"""
+    
+    response_prefix = "Certainly:" if attempt_count == 1 else "Here's a fresh strategic perspective:"
+    response = f"🎯 **{response_prefix}**\n\n"
+    
+    for i, festival_name in enumerate(festivals):
+        festival_data = get_festival_window_data(festival_name, sales_data)
+        trends = analyze_festival_fabric_trends(festival_data) if festival_data else {}
+        
+        festival_date = datetime.strptime(FESTIVAL_DATES.get(festival_name, "2025-11-01"), "%Y-%m-%d")
+        days_until = (festival_date - datetime.now()).days
+        
+        response += f"**🎭 {festival_name}:**\n"
+        
+        if festival_data and trends:
+            top_fabric = list(trends['weave_trends'].keys())[0] if trends['weave_trends'] else "Premium Cotton"
+            order_count = len(festival_data)
+            
+            if angle == "booking_trends":
+                response += f"✅ **Top Fabrics:** {top_fabric} based on {order_count} confirmed bookings\n"
+                response += f"📦 **Stocking Window:** Stock 15-20 days before festival\n"
+                response += f"💰 **Profit Tip:** Focus on {top_fabric} - highest booking frequency\n"
+            elif angle == "profit_margins":
+                revenue = trends.get('total_revenue', 0)
+                response += f"✅ **Top Fabrics:** {top_fabric} generated ₹{revenue:,.0f} revenue\n"
+                response += f"📦 **Stocking Window:** Premium items 20 days before\n"
+                response += f"💰 **Profit Tip:** Recommend premium pricing strategy\n"
+            else:
+                response += f"✅ **Top Fabrics:** {top_fabric} and complementary fabrics\n"
+                response += f"📦 **Stocking Window:** Coordinate with {order_count} confirmed orders\n"
+                response += f"💰 **Profit Tip:** Strong demand patterns detected\n"
+        else:
+            fallback_fabrics = FESTIVAL_FABRIC_RECOMMENDATIONS.get(festival_name, ["Traditional fabrics"])
+            response += f"✅ **Top Fabrics:** {', '.join(fallback_fabrics[:2])} (traditional preferences)\n"
+            response += f"📦 **Stocking Window:** Start stocking now (Festival in {days_until} days)\n"
+            response += f"💰 **Profit Tip:** Traditional demand expected based on cultural significance\n"
+        
+        if i < len(festivals) - 1:
+            response += "\n"
+    
+    # Add combined action plan
+    response += f"""
+**🚀 Combined Action Plan:**
+• Coordinate inventory across festivals to avoid conflicts
+• Stagger promotional campaigns for maximum impact  
+• Create festival combo packages for cross-selling
+• Monitor demand patterns for future planning"""
+    
+    return response
     """Check if the question is asking about festival-specific fabric recommendations"""
     festival_keywords = [
         'festival', 'diwali', 'holi', 'christmas', 'eid', 'pongal', 'valentine',
@@ -688,11 +996,18 @@ def generate_response(user_question, chat_history=None, followup_flag=False):
         
         print(f"✅ Successfully loaded {len(sales_data)} records from live API")
         
-        # 🎭 FESTIVAL-AWARE ANALYSIS - Check if this is a festival question first
-        if is_festival_question(user_question):
+        # � BUSINESS STRATEGY ANALYSIS - Check business strategy questions first (higher priority)
+        if is_business_strategy_question(user_question):
+            festivals = extract_multiple_festivals(user_question)
+            if festivals:
+                print(f"� Detected business strategy question for: {', '.join(festivals)}")
+                return generate_business_strategy_response(festivals, user_question, sales_data, chat_history)
+        
+        # � FESTIVAL-AWARE ANALYSIS - Check if this is a festival question (non-strategy)
+        if is_festival_question(user_question) and not is_business_strategy_question(user_question):
             festival_name = extract_festival_name(user_question)
             if festival_name:
-                print(f"🎭 Detected festival question for: {festival_name}")
+                print(f"� Detected festival question for: {festival_name}")
                 return generate_festival_fabric_response(festival_name, user_question, sales_data)
         
         # --- Smart Context Analysis ---

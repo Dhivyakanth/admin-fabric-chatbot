@@ -126,7 +126,75 @@ Try asking these questions to explore the sales analytics:
 - "Analyze cotton dress sales trends"
 - "Which month had the highest sales?"
 
-## 🎭 Festival Intelligence System
+## � Business Strategy Request Handling
+
+The chatbot now supports comprehensive business strategy requests with session-based memory to provide varied strategic perspectives:
+
+### Features:
+- **Strategy Detection**: Recognizes business strategy questions using pattern matching
+- **Multi-Festival Support**: Handles queries for single or multiple festivals 
+- **Session Memory**: Tracks repeated questions and provides different strategic angles
+- **Six Strategic Angles**: Booking trends, agent performance, profit margins, timing & stocking, customer behavior, promotional tactics
+- **Comprehensive Responses**: Structured recommendations with actionable insights
+
+### Usage Examples:
+
+**Single Festival Strategy:**
+```
+User: "Give me business strategies for Diwali"
+Bot: 🎯 **Certainly. Here's a business strategy for Diwali:**
+
+**✅ Top Fabrics:** Zari Silk, Premium Cotton, Festive Brocade (based on historical patterns)
+**📦 Stocking Window:** Start stocking now (Festival in 295 days)
+**📈 Demand Insights:** Traditional booking patterns suggest early preparation
+**💰 Profit Tip:** Festival fabrics show 20% higher margins during peak season
+**🎨 Style Direction:** Authentic colors matching cultural expectations
+**🛍️ Action Plan:** Stock moderate quantities, monitor early booking signals
+```
+
+**Multi-Festival Strategy:**
+```
+User: "Business strategies for Christmas and Holi"
+Bot: 🎯 **Certainly:**
+
+**🎭 Holi:**
+✅ **Top Fabrics:** Light Cotton, Plain Dyed Fabrics (traditional preferences)
+📦 **Stocking Window:** Start stocking now (Festival in -148 days)
+💰 **Profit Tip:** Traditional demand expected based on cultural significance
+
+**🎭 Christmas:**
+✅ **Top Fabrics:** Wool Blends, Festive Flannel (traditional preferences)
+📦 **Stocking Window:** Start stocking now (Festival in 46 days)
+💰 **Profit Tip:** Traditional demand expected based on cultural significance
+
+**🚀 Combined Action Plan:**
+• Coordinate inventory across festivals to avoid conflicts
+• Stagger promotional campaigns for maximum impact  
+• Create festival combo packages for cross-selling
+• Monitor demand patterns for future planning
+```
+
+**Repeated Questions (Session Memory):**
+```
+User: "Give me business strategies for Diwali" (First time)
+Bot: "Certainly. Here's a business strategy for Diwali..." (Booking trends angle)
+
+User: "Give me business strategies for Diwali" (Second time)
+Bot: "Noted, here's another strategic angle for Diwali..." (Agent performance angle)
+
+User: "Give me business strategies for Diwali" (Third time)
+Bot: "Noted, here's another strategic angle for Diwali..." (Profit margins angle)
+```
+
+### Supported Business Strategy Patterns:
+- "Give me business strategies for [festival]"
+- "Business strategies for [festival1] and [festival2]"
+- "What are the business strategies for [festival]?"
+- "Business plan for [festival]"
+- "Marketing strategy for [festival]"
+- "Sales strategy for [festival]"
+
+## �🎭 Festival Intelligence System
 
 ### **Supported Festivals & Events**
 The chatbot provides intelligent fabric recommendations for:
