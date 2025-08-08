@@ -8,36 +8,56 @@ from collections import Counter
 import calendar
 
 
-# Festival Data
+# Comprehensive Festival and Commercial Event Data
 FESTIVALS = [
-    {"name": "New Year", "date": "2025-01-01", "category": "Public Holiday"},
+    # Major Indian Festivals
+    {"name": "Pongal", "date": "2025-01-14", "category": "Festival"},
     {"name": "Republic Day", "date": "2025-01-26", "category": "National Holiday"},
+    {"name": "Valentine's Day", "date": "2025-02-14", "category": "Commercial"},
     {"name": "Holi", "date": "2025-03-14", "category": "Festival"},
     {"name": "Good Friday", "date": "2025-04-18", "category": "Religious"},
     {"name": "Eid al-Fitr", "date": "2025-04-30", "category": "Religious"},
+    {"name": "Mother's Day", "date": "2025-05-11", "category": "Commercial"},
+    {"name": "Father's Day", "date": "2025-06-15", "category": "Commercial"},
+    {"name": "Raksha Bandhan", "date": "2025-08-09", "category": "Festival"},
     {"name": "Independence Day", "date": "2025-08-15", "category": "National Holiday"},
     {"name": "Janmashtami", "date": "2025-08-26", "category": "Festival"},
     {"name": "Ganesh Chaturthi", "date": "2025-08-29", "category": "Festival"},
-    {"name": "Gandhi Jayanti", "date": "2025-10-02", "category": "National Holiday"},
+    {"name": "Karva Chauth", "date": "2025-10-20", "category": "Festival"},
     {"name": "Dussehra", "date": "2025-10-22", "category": "Festival"},
     {"name": "Diwali", "date": "2025-11-01", "category": "Festival"},
     {"name": "Christmas", "date": "2025-12-25", "category": "Religious"},
     
-    # Valentine's Day and other commercial festivals
-    {"name": "Valentine's Day", "date": "2025-02-14", "category": "Commercial"},
-    {"name": "Mother's Day", "date": "2025-05-11", "category": "Commercial"},
-    {"name": "Father's Day", "date": "2025-06-15", "category": "Commercial"},
-    {"name": "Raksha Bandhan", "date": "2025-08-09", "category": "Festival"},
-    {"name": "Karva Chauth", "date": "2025-10-20", "category": "Festival"},
-    {"name": "Bhai Dooj default", "date": "2025-07-31", "category": "Festival"},
-    
-    # Seasonal sales periods
-    {"name": "Summer Sale Season", "date": "2025-04-01", "category": "Sale Period"},
+    # Sale Periods and Commercial Events
     {"name": "Monsoon Sale", "date": "2025-07-01", "category": "Sale Period"},
     {"name": "Festive Season Sale", "date": "2025-09-15", "category": "Sale Period"},
     {"name": "Winter Collection Launch", "date": "2025-11-15", "category": "Sale Period"},
-    {"name": "Year End Sale", "date": "2025-12-15", "category": "Sale Period"}
+    {"name": "Year-End Sale", "date": "2025-12-15", "category": "Sale Period"}
 ]
+
+# Festival-Specific Fabric Recommendations (Fallback Data)
+FESTIVAL_FABRIC_RECOMMENDATIONS = {
+    "Pongal": ["Checked Cotton", "Plain Dobby", "Organic Cotton"],
+    "Diwali": ["Zari Silk", "Premium Cotton", "Festive Brocade"],
+    "Eid al-Fitr": ["Shiny Satin", "Soft Crepe", "Embroidered Net"],
+    "Holi": ["Light Cotton", "Plain Dyed Fabrics", "Chanderi"],
+    "Valentine's Day": ["Silk Satin", "Chiffon", "Crepe in red shades"],
+    "Christmas": ["Wool Blends", "Festive Flannel", "Red Cotton"],
+    "Monsoon Sale": ["Poly Cotton", "Water-resistant Rayon", "Quick-Dry Knits"],
+    "Raksha Bandhan": ["Cotton Printed", "Lightweight Dobby", "Ethnic Wear Blends"],
+    "Karva Chauth": ["Net Lace", "Silk Crepe", "Light Embroidered Satin"],
+    "Ganesh Chaturthi": ["Traditional Silk", "Festive Cotton", "Ethnic Prints"],
+    "Janmashtami": ["Blue Cotton", "Krishna Themed Prints", "Traditional Silk"],
+    "Mother's Day": ["Elegant Silk", "Soft Cotton", "Floral Prints"],
+    "Father's Day": ["Premium Cotton", "Formal Fabrics", "Classic Patterns"],
+    "Independence Day": ["Tricolor Cotton", "Patriotic Prints", "Khadi Fabric"],
+    "Republic Day": ["National Theme Cotton", "Formal Blends", "Patriotic Colors"],
+    "Good Friday": ["Simple Cotton", "Plain Fabrics", "Modest Designs"],
+    "Dussehra": ["Festive Silk", "Traditional Cotton", "Ethnic Weaves"],
+    "Festive Season Sale": ["Mixed Festive Collection", "Silk Varieties", "Cotton Blends"],
+    "Winter Collection Launch": ["Wool Blends", "Heavy Cotton", "Winter Fabrics"],
+    "Year-End Sale": ["All Categories", "Clearance Stock", "Mixed Inventory"]
+}
 
 
 def get_upcoming_festivals_data(days_ahead=10):

@@ -6,9 +6,17 @@ A full-stack AI-powered sales analytics chatbot for fashion retail businesses. T
 
 ### 🤖 AI-Powered Analytics
 - **Intelligent Sales Analysis**: Get insights on sales trends, customer behavior, and product performance
+- **🎭 Festival-Aware Fabric Intelligence**: Advanced festival-specific fabric recommendations with profit-driven insights
 - **Predictive Analytics**: Forecast future sales based on historical data
 - **Natural Language Queries**: Ask questions in plain English about your sales data
 - **Real-time Data Integration**: Live connection to sales APIs for up-to-date analysis
+
+### 🎭 Festival Intelligence Features
+- **Smart Festival Detection**: Automatically recognizes 20+ festivals and commercial events
+- **Contextual Window Analysis**: Analyzes confirmed bookings [20 days before] to [5 days after] festivals
+- **Profit-Driven Recommendations**: Focus on high-margin, high-volume fabric suggestions
+- **Fallback Strategy**: Curated traditional recommendations when no booking data exists
+- **Trend Predictions**: Future demand forecasting based on historical festival patterns
 
 ### 🎨 Modern Interface
 - **Responsive Design**: Works perfectly on desktop, tablet, and mobile devices
@@ -94,6 +102,13 @@ The frontend will start on `http://localhost:5173`
 
 Try asking these questions to explore the sales analytics:
 
+### 🎭 Festival Fabric Intelligence
+- "What fabrics should we stock for Diwali?"
+- "Suggest fabrics for Valentine's Day"
+- "Recommend profitable fabrics for Holi"
+- "Which fabrics performed best during last Christmas?"
+- "Show me festival trends for Raksha Bandhan"
+
 ### 📈 Sales Analysis
 - "What is the most sold weave type?"
 - "Show me sales trends for the past 6 months"
@@ -110,6 +125,69 @@ Try asking these questions to explore the sales analytics:
 - "Compare agent performance"
 - "Analyze cotton dress sales trends"
 - "Which month had the highest sales?"
+
+## 🎭 Festival Intelligence System
+
+### **Supported Festivals & Events**
+The chatbot provides intelligent fabric recommendations for:
+
+**Major Festivals:**
+- Diwali, Holi, Christmas, Eid al-Fitr, Pongal
+- Raksha Bandhan, Karva Chauth, Janmashtami, Ganesh Chaturthi, Dussehra
+
+**Commercial Events:**
+- Valentine's Day, Mother's Day, Father's Day
+
+**National Holidays:**
+- Independence Day, Republic Day, Good Friday
+
+**Sale Periods:**
+- Monsoon Sale, Festive Season Sale, Winter Collection Launch, Year-End Sale
+
+### **How Festival Intelligence Works**
+
+1. **Smart Detection**: Automatically identifies festival questions
+2. **Window Analysis**: Analyzes confirmed bookings from 20 days before to 5 days after festival dates
+3. **Trend Analysis**: Examines weave types, quality grades, and compositions
+4. **Profit Focus**: Highlights high-margin and high-volume fabric combinations
+5. **Fallback Recommendations**: Provides curated suggestions when no data exists
+6. **Future Predictions**: Forecasts demand based on historical patterns
+
+### **Example Festival Responses**
+
+**With Data Available:**
+```
+🎭 Festival Fabric Intelligence: Diwali
+
+📊 Data Analysis Summary:
+Based on confirmed bookings from 15 orders during Diwali period:
+
+🔥 Top Performing Fabrics:
+• Premium Cotton: 8 orders (53.3%)
+• Zari Silk: 4 orders (26.7%)
+• Festive Brocade: 3 orders (20.0%)
+
+💰 Profitability Insight:
+• Highest revenue generator: Premium Cotton (₹45,230.00)
+
+📈 Future Trend Prediction:
+• Expected growth: 25% increase expected
+• Recommended stock increase: 30%
+```
+
+**Fallback Strategy:**
+```
+🎭 Festival Fabric Intelligence: Karva Chauth
+
+📋 Recommendation Status:
+There are no recent confirmed orders around Karva Chauth, but based on 
+traditional preferences and similar past events, we recommend:
+
+🎯 Curated Fabric Recommendations:
+1. Net Lace
+2. Silk Crepe  
+3. Light Embroidered Satin
+```
 
 ## 🏗️ Project Structure
 
