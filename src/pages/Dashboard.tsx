@@ -45,6 +45,79 @@ interface Festival {
 }
 
 const Dashboard = () => {
+  // Default admin questions grouped by category
+  const defaultQuestions = [
+    {
+      category: '🟣 Business Overview',
+      questions: [
+        'What is the largest single order placed (by quantity)?',
+        'Which customer has ordered the maximum quantity overall?',
+        'Who are the top 3 customers?',
+        'What is the total number of cancelled orders?',
+        'How many agents are handling orders?',
+      ],
+    },
+    {
+      category: '👤 Customer Insights',
+      questions: [
+        'Which customers have placed multiple orders?',
+        'Who are the customers that ordered the same composition but at different rates?',
+        'Which customer has the highest number of confirmed orders?',
+        'Are there customers who have only 0.0 rate orders?',
+      ],
+    },
+    {
+      category: '🧑‍💼 Agent Insights',
+      questions: [
+        'Which agent generated the highest revenue?',
+        'Who are the customers handled by multiple agents?',
+        'Which agent managed the maximum variety of weave types?',
+      ],
+    },
+    {
+      category: '🕒 Order & Trend Monitoring',
+      questions: [
+        'Which date had the highest number of orders?',
+        'How many orders were placed in the current month?',
+        'What is the difference in total quantity between confirmed and processed orders?',
+      ],
+    },
+  ];
+
+  // Handles clicking a default question button
+  const handleDefaultQuestionClick = async (question: string) => {
+    if (!isBackendConnected) return;
+    let chatId = currentChatId;
+    // Create new chat if none exists
+    if (!chatId) {
+      const response = await chatbotApi.createNewChat();
+      if (response.success && response.data) {
+        setChats(prev => [response.data!, ...prev]);
+        chatId = response.data!.id;
+        setCurrentChatId(chatId);
+      } else {
+        toast({ title: 'Error', description: response.error || 'Failed to create chat', variant: 'destructive' });
+        return;
+      }
+    }
+    setNewMessage("");
+    setIsTyping(true);
+    try {
+      const messageResponse = await chatbotApi.sendMessage(chatId, question);
+      if (messageResponse.success && messageResponse.data) {
+        setChats(prev => prev.map(chat => chat.id === chatId ? messageResponse.data!.chat : chat));
+        // Scroll to chat area
+        const chatArea = document.querySelector('.chat-messages');
+        if (chatArea) chatArea.scrollIntoView({ behavior: 'smooth' });
+      } else {
+        throw new Error(messageResponse.error || 'Failed to send message');
+      }
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message || 'Failed to send message', variant: 'destructive' });
+    } finally {
+      setIsTyping(false);
+    }
+  };
   const [chats, setChats] = useState<ApiChat[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState("");
@@ -274,7 +347,11 @@ const Dashboard = () => {
       if (response.success && response.data) {
         setChats(prev => [response.data!, ...prev]);
         setCurrentChatId(response.data!.id);
-        // Toast notification removed - no popup for new chat creation
+        toast({
+          title: "New Chat Created",
+          description: "You can now start your analysis.",
+          variant: "default",
+        });
       } else {
         throw new Error(response.error || "Failed to create chat");
       }
@@ -383,11 +460,13 @@ const Dashboard = () => {
         <div className="flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-primary" />
           <h1 className="text-lg font-semibold">Sales Chatbot</h1>
-          {isBackendConnected ? (
-            <Wifi className="h-4 w-4 text-green-500" />
-          ) : (
-            <WifiOff className="h-4 w-4 text-red-500" />
-          )}
+          <ScrollArea className="max-h-[440px] pr-4" style={{ scrollbarWidth: 'thin' }}>
+            {isBackendConnected ? (
+              <Wifi className="h-4 w-4 text-green-500" />
+            ) : (
+              <WifiOff className="h-4 w-4 text-red-500" />
+            )}
+          </ScrollArea>
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
@@ -437,6 +516,14 @@ const Dashboard = () => {
             >
               <Mail className="h-4 w-4 mr-2" />
               Send Mail
+            </Button>
+            <Button
+              onClick={() => window.open('http://localhost:3000/livechat/index.html', '_blank')}
+              disabled={!isBackendConnected}
+              className="w-full bg-gradient-primary hover:opacity-90 transition-smooth"
+            >
+              <MessageCircle className="h-4 w-4 mr-2" />
+              LiveChat
             </Button>
             
             <Button 
@@ -639,34 +726,60 @@ const Dashboard = () => {
             </div>
           </>
         ) : (
-          // Welcome Screen
-          <div className="flex-1 flex items-center justify-center p-4">
-            <div className="text-center">
-              <div className="p-4 md:p-6 rounded-full bg-gradient-primary/10 w-16 h-16 md:w-24 md:h-24 mx-auto mb-4 md:mb-6 flex items-center justify-center">
+          // Welcome Screen + Default Questions
+          <div className="flex-1 flex justify-center" style={{ minHeight: '60vh' }}>
+            <div
+              className="w-full flex flex-col items-center justify-start"
+              style={{ marginTop: '20vh' }}
+            >
+              <div className="p-4 md:p-6 rounded-full bg-gradient-primary/10 w-16 h-16 md:w-24 md:h-24 flex items-center justify-center mb-4 md:mb-6">
                 <Sparkles className="h-8 w-8 md:h-12 md:w-12 text-primary" />
               </div>
-              <h2 className="text-xl md:text-2xl font-bold mb-4 bg-gradient-primary bg-clip-text text-transparent">
-                Welcome to Sales Analytics AI
+              <h2 className="text-xl md:text-2xl font-bold mb-3 bg-gradient-primary bg-clip-text text-transparent text-center">
+                Welcome to the Admin Fabric Dashboard! Ready to start your next analysis?
               </h2>
-              <p className="text-sm md:text-base text-muted-foreground mb-6 max-w-md mx-auto px-4">
-                Your intelligent sales data analysis assistant. Create a new chat to start exploring your fashion sales insights, trends, and predictions.
-              </p>
+              <div className="h-2" />
               {isBackendConnected ? (
-                <Button 
+                <Button
                   onClick={createNewChat}
-                  className="bg-gradient-primary hover:opacity-90 transition-smooth shadow-soft w-full md:w-auto"
+                  className="bg-gradient-primary hover:opacity-90 transition-smooth shadow-soft w-full md:w-auto mt-4 text-base font-semibold px-6 py-3"
                 >
-                  <Plus className="h-4 w-4 mr-2" />
                   Start New Analysis
                 </Button>
               ) : (
-                <Alert className="max-w-md mx-auto">
+                <Alert className="max-w-md mx-auto mt-4">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
                     Please start the backend server to begin analysis
                   </AlertDescription>
                 </Alert>
               )}
+
+              {/* Default Questions Section */}
+              <div className="mx-[10%] w-[80%] mt-10">
+                <h3 className="text-lg md:text-xl font-bold mb-6 text-center text-primary">Default Questions</h3>
+                <div className="space-y-[2%]">
+                  {defaultQuestions.map((cat, idx) => (
+                    <div key={cat.category} className="mb-8">
+                      <h4 className="font-semibold text-base md:text-lg mb-4 text-purple-700 dark:text-purple-300 flex items-center gap-2">
+                        {cat.category}
+                      </h4>
+                      <div className="space-y-[2%]">
+                        {cat.questions.map((q, qidx) => (
+                          <Button
+                            key={q}
+                            onClick={() => handleDefaultQuestionClick(q)}
+                            className="w-full px-6 py-4 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white text-base font-medium whitespace-normal text-left shadow-soft hover:from-purple-400 hover:to-pink-400 hover:shadow-lg transition-smooth"
+                            style={{ minHeight: '52px' }}
+                          >
+                            {q}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -674,122 +787,140 @@ const Dashboard = () => {
       
       {/* Festival Notifications Popup Modal */}
       <Dialog open={showFestivalPopup} onOpenChange={setShowFestivalPopup}>
-        <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-orange-800 dark:text-orange-200 text-xl">
-              <Calendar className="h-6 w-6" />
-              🎉 Upcoming Festivals & Events
+        <DialogContent className="max-w-[95vw] w-[900px] max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader className="px-6 py-6 border-b border-border">
+            <DialogTitle className="flex items-center gap-3 text-orange-800 dark:text-orange-200 text-2xl font-bold">
+              <Calendar className="h-7 w-7" />
+              <span>Upcoming Festivals & Events</span>
             </DialogTitle>
-            <DialogDescription className="text-base">
-              💡 Update your inventory and promotions to maximize festival sales!
+            <DialogDescription className="text-lg mt-3 text-orange-700 dark:text-orange-300 font-medium">
+              <span className="inline-flex items-center gap-2">
+                <Sparkles className="h-5 w-5" />
+                Update your inventory and promotions to maximize festival sales!
+              </span>
             </DialogDescription>
           </DialogHeader>
           
-          <ScrollArea className="max-h-[60vh] pr-4">
-            <div className="space-y-4">
-              {upcomingFestivals.map((festival, index) => (
-                <div key={index} className="bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-950/20 dark:to-red-950/20 rounded-lg p-5 border border-orange-200 dark:border-orange-800 shadow-sm">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <Gift className="h-6 w-6 text-orange-600" />
-                      <div>
-                        <h3 className="font-bold text-lg text-gray-900 dark:text-white">
-                          {festival.name}
-                        </h3>
-                        <span className="text-sm px-3 py-1 bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 rounded-full">
-                          {festival.category}
+          {/* Scrollable Content Area */}
+          <div className="flex-1 overflow-hidden">
+            <ScrollArea className="h-full px-6 py-4">
+              <div className="space-y-6 pr-4">
+                {upcomingFestivals.map((festival, index) => (
+                  <div key={index} className="bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-950/20 dark:to-red-950/20 rounded-xl p-6 border border-orange-200 dark:border-orange-800 shadow-md">
+                    {/* Festival Header */}
+                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+                      <div className="flex items-center gap-4">
+                        <div className="p-2 bg-orange-100 dark:bg-orange-900/50 rounded-full">
+                          <Gift className="h-6 w-6 text-orange-600" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-xl text-gray-900 dark:text-white mb-2">
+                            {festival.name}
+                          </h3>
+                          <span className="inline-block px-3 py-1 bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 rounded-full text-sm font-semibold">
+                            {festival.category}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-center md:text-right">
+                        <span className="text-lg font-bold text-orange-600 bg-white/80 dark:bg-gray-800/80 px-4 py-2 rounded-full">
+                          {festival.is_today ? "🎉 Today!" : `⏰ ${festival.days_until} days`}
                         </span>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <span className="text-lg font-bold text-orange-600">
-                        {festival.is_today ? "🎉 Today!" : `⏰ ${festival.days_until} days`}
-                      </span>
+                    
+                    {/* Recommendations Grid */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      {/* Stock Updates */}
+                      {festival.recommendations.stock_updates.length > 0 && (
+                        <div className="bg-white/90 dark:bg-gray-900/90 rounded-lg p-5 border border-blue-200 dark:border-blue-800 shadow-sm">
+                          <h4 className="font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-2 mb-3 text-base">
+                            <span className="text-lg">📦</span>
+                            Stock Updates
+                          </h4>
+                          <ul className="space-y-2">
+                            {festival.recommendations.stock_updates.map((item, i) => (
+                              <li key={i} className="text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2">
+                                <span className="text-blue-500 mt-1 flex-shrink-0">•</span>
+                                <span className="leading-relaxed">{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      
+                      {/* Discount Suggestions */}
+                      {festival.recommendations.discount_suggestions.length > 0 && (
+                        <div className="bg-white/90 dark:bg-gray-900/90 rounded-lg p-5 border border-green-200 dark:border-green-800 shadow-sm">
+                          <h4 className="font-semibold text-green-600 dark:text-green-400 flex items-center gap-2 mb-3 text-base">
+                            <span className="text-lg">💰</span>
+                            Discount Suggestions
+                          </h4>
+                          <ul className="space-y-2">
+                            {festival.recommendations.discount_suggestions.map((item, i) => (
+                              <li key={i} className="text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2">
+                                <span className="text-green-500 mt-1 flex-shrink-0">•</span>
+                                <span className="leading-relaxed">{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      
+                      {/* Marketing Tips */}
+                      {festival.recommendations.marketing_tips.length > 0 && (
+                        <div className="bg-white/90 dark:bg-gray-900/90 rounded-lg p-5 border border-purple-200 dark:border-purple-800 shadow-sm">
+                          <h4 className="font-semibold text-purple-600 dark:text-purple-400 flex items-center gap-2 mb-3 text-base">
+                            <span className="text-lg">📈</span>
+                            Marketing Tips
+                          </h4>
+                          <ul className="space-y-2">
+                            {festival.recommendations.marketing_tips.map((item, i) => (
+                              <li key={i} className="text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2">
+                                <span className="text-purple-500 mt-1 flex-shrink-0">•</span>
+                                <span className="leading-relaxed">{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
                   </div>
-                  
-                  {/* Recommendations Grid */}
-                  <div className="grid md:grid-cols-3 gap-4">
-                    {festival.recommendations.stock_updates.length > 0 && (
-                      <div className="bg-white/70 dark:bg-gray-900/70 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
-                        <h4 className="font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-2 mb-3">
-                          📦 Stock Updates
-                        </h4>
-                        <ul className="space-y-1">
-                          {festival.recommendations.stock_updates.map((item, i) => (
-                            <li key={i} className="text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2">
-                              <span className="text-blue-500 mt-1">•</span>
-                              {item}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    
-                    {festival.recommendations.discount_suggestions.length > 0 && (
-                      <div className="bg-white/70 dark:bg-gray-900/70 rounded-lg p-4 border border-green-200 dark:border-green-800">
-                        <h4 className="font-semibold text-green-600 dark:text-green-400 flex items-center gap-2 mb-3">
-                          💰 Discount Suggestions
-                        </h4>
-                        <ul className="space-y-1">
-                          {festival.recommendations.discount_suggestions.map((item, i) => (
-                            <li key={i} className="text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2">
-                              <span className="text-green-500 mt-1">•</span>
-                              {item}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    
-                    {festival.recommendations.marketing_tips.length > 0 && (
-                      <div className="bg-white/70 dark:bg-gray-900/70 rounded-lg p-4 border border-purple-200 dark:border-purple-800">
-                        <h4 className="font-semibold text-purple-600 dark:text-purple-400 flex items-center gap-2 mb-3">
-                          📈 Marketing Tips
-                        </h4>
-                        <ul className="space-y-1">
-                          {festival.recommendations.marketing_tips.map((item, i) => (
-                            <li key={i} className="text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2">
-                              <span className="text-purple-500 mt-1">•</span>
-                              {item}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
           
-          <div className="flex justify-between items-center gap-3 mt-6 pt-4 border-t">
-            <div className="text-sm text-gray-600 dark:text-gray-400">
-              💡 Pro Tip: Plan ahead for better sales performance!
-            </div>
-            <div className="flex gap-3">
-              <Button 
-                onClick={handleGoToChat}
-                disabled={!isBackendConnected || upcomingFestivals.length === 0}
-                variant="outline" 
-                className="px-6 border-primary text-primary hover:bg-primary hover:text-primary-foreground"
-              >
-                <MessageCircle className="h-4 w-4 mr-2" />
-                Go to Chat
-              </Button>
-              <Button 
-                variant="outline" 
-                onClick={handleRemindLater}
-                className="px-6"
-              >
-                Remind Later
-              </Button>
-              <Button 
-                onClick={handleGotIt}
-                className="bg-orange-600 hover:bg-orange-700 px-6"
-              >
-                Got It! 🎯
-              </Button>
+          {/* Footer Actions */}
+          <div className="px-6 py-6 border-t border-border bg-gray-50/50 dark:bg-gray-900/50">
+            <div className="flex flex-col lg:flex-row justify-between items-center gap-4">
+              <div className="text-sm text-gray-600 dark:text-gray-400 font-medium text-center lg:text-left">
+                💡 Pro Tip: Plan ahead for better sales performance!
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+                <Button 
+                  onClick={handleGoToChat}
+                  disabled={!isBackendConnected || upcomingFestivals.length === 0}
+                  variant="outline" 
+                  className="w-full sm:w-auto px-6 py-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground font-semibold"
+                >
+                  <MessageCircle className="h-4 w-4 mr-2" />
+                  Go to Chat
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={handleRemindLater}
+                  className="w-full sm:w-auto px-6 py-2 font-semibold"
+                >
+                  Remind Later
+                </Button>
+                <Button 
+                  onClick={handleGotIt}
+                  className="w-full sm:w-auto bg-orange-600 hover:bg-orange-700 px-6 py-2 font-semibold text-white"
+                >
+                  Got It! 🎯
+                </Button>
+              </div>
             </div>
           </div>
         </DialogContent>

@@ -1,0 +1,27 @@
+date,quality,weave,quantity,composition,status,_id,rate,agentName,customerName
+2025-05-27T17:09:18.536Z,Primium ,Plain,500,cotton 100%,Confirmed,6835a4688de470c6e81922ab,60.0,Mukilan,Jhon
+2025-05-28T10:44:03.779Z,stand ,linen,120m,20%,Confirmed,68369b9de1974af4e1a70209,500.0,Mukilan,qilyze
+2025-05-28T16:26:49.021Z,premium ,spandex ,120m,20%,Confirmed,6836ebf2894eeb25230c3924,500.0,Mukilan,jogoco
+2025-05-30T17:27:57.515Z,premium ,cot,100,20,Confirmed,68399d46c39785abded8aab6,0.0,Mukilan,vil
+2025-06-16T11:08:40.171Z,7.5,5,10,something ,Processed,684fade222821a1a194d8910,0.0,Mukilan,Velmurugan 
+2025-06-16T17:12:25.791Z,405672,from nhi,45,RBI,Confirmed,6850032422821a1a194e258d,45.0,Mukilan,Velmurugan 
+2025-06-27T23:05:03.600Z,premium ,cotton ,100,20,Processed,685ed6492e178097f7ea16f5,0.0,Mukilan,waxoc 
+2025-07-22T12:16:08.492Z,tyy,ttt,tyy,ftg,Processed,687f33b1b752389255f44670,0.0,Mukilan,simeon j
+2025-06-16T11:50:56.678Z,n,g,g,h,Processed,684fb7ca22821a1a194d9b6d,0.0,Mukilan,Viswa V
+2025-06-16T13:09:46.821Z,nm,gjj,fhy,gfh,Confirmed,684fca4422821a1a194dae6a,400.0,Mukilan,Viswa V
+2025-06-16T16:53:15.359Z,40x40 132x68 65inch,satin ,5000,100pct cotton ,Confirmed,684ffea422821a1a194e0869,75.0,Mukilan,Maharaajan
+2025-06-17T12:12:46.583Z,premier,linen,120m,70%,Confirmed,68510e6722821a1a194e4837,400.0,Mukilan,ciwo
+2025-07-05T14:11:26.226Z,40s,Plain,25000,Cotton ,Processed,6868e53b2e178097f7ed693b,0.0,Mukilan,Azhagarsamy
+2025-07-09T13:03:42.202Z,60 60 104 96 69,plain,84000 yards,mxm,Confirmed,686e1b564013003d98194b2f,0.815,Mukilan,palaniappan
+2025-07-09T13:08:35.433Z,"30s x 30s 124 x 64 63"" Twill",twill,100000,cc x cc,Confirmed,686e166e4013003d9818d8bb,80.0,Devaraj,Nandhakumar T
+2025-07-09T13:19:45.923Z,40s x 40 92 x 72 63,plain,50000,cc x cc,Declined,686e190d4013003d98192efc,70.0,Devaraj,Nandhakumar T
+2025-07-09T12:42:35.559Z,30 30 124 64 63,twill,5000,c*c,Confirmed,686e16644013003d9818d89f,0.0,Boopalan,palaniappan
+2025-07-09T12:58:37.850Z,40 40 132 72 63,plain,3000,c x c,Declined,686e1a264013003d98193c6a,0.0,Boopalan,palaniappan
+2025-08-25T19:17:09.253Z,30 30 124 64 63,twill,10000,cotton by cotton ,Confirmed,68ac695d983d8d291d2385dd,72.0,Mukilan,palaniappan 
+2025-08-25T19:22:04.779Z,40 40 132 82 63,plain,50000,cotton ,Declined,68ac6a85983d8d291d23869f,81.0,Mukilan,palaniappan 
+2025-08-25T19:38:37.074Z,60 60 104 96 63,plain,84000,modal,Confirmed,68ac6e65983d8d291d2388e4,65.0,Devaraj,palaniappan 
+2025-08-25T19:48:17.610Z,40 40 133 82 67 ,mtrs,20000,mc x mc,Confirmed,68ac70aa983d8d291d238acd,80.0,Devaraj,palaniappan 
+2025-08-26T16:22:33.557Z,40401327263,Plain ,50000,cotton x cotton ,Declined,68ad91f1983d8d291d239729,70.0,K P MAHARAAJAN,Bhoobalan 
+2025-08-29T10:32:48.610Z,ghj,ghhh,hhh,ghhu,Processed,68b13479983d8d291d23ce36,0.0,Mukilan,simeon
+2025-08-29T10:32:58.015Z,ghjbv,hhuij,ghj,vcghnh,Declined,68b13482983d8d291d23ce48,0.0,Mukilan,simeon
+2025-08-29T10:33:07.260Z,ghghv,ggbbn,vnnj,bbbttt,Confirmed,68b1348b983d8d291d23ce5c,0.0,Mukilan,simeon
