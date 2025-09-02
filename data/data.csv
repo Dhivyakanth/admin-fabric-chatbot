@@ -1,0 +1,20 @@
+date,quality,weave,quantity,composition,status,_id,rate,agentName,customerName
+2025-05-27T17:09:18.536Z,premium,Plain,500.0,100% Cotton,Confirmed,6835a4688de470c6e81922ab,60.0,Mukilan,Jhon
+2025-05-28T10:44:03.779Z,standard,Linen,120.0,20% Mixed,Confirmed,68369b9de1974af4e1a70209,500.0,Mukilan,qilyze
+2025-05-28T16:26:49.021Z,Premium,Spandex,120.0,20% Mixed,Confirmed,6836ebf2894eeb25230c3924,500.0,Mukilan,jogoco
+2025-05-30T17:27:57.515Z,Premium,cotton_weave,100.0,20% Mixed,Confirmed,68399d46c39785abded8aab6,0.0,Mukilan,vil
+2025-06-16T11:08:40.171Z,grade_7.5,unknown,10.0,Unknown,Processed,684fade222821a1a194d8910,0.0,Mukilan,Velmurugan
+2025-06-16T17:12:25.791Z,unknown,unknown,45.0,Unknown,Confirmed,6850032422821a1a194e258d,45.0,Mukilan,Velmurugan
+2025-06-27T23:05:03.600Z,Premium,Cotton,100.0,20% Mixed,Processed,685ed6492e178097f7ea16f5,0.0,Mukilan,waxoc
+2025-07-22T12:16:08.492Z,unknown,unknown,0.0,Unknown,Processed,687f33b1b752389255f44670,0.0,Mukilan,simeon j
+2025-06-16T11:50:56.678Z,unknown,unknown,0.0,Unknown,Processed,684fb7ca22821a1a194d9b6d,0.0,Mukilan,Viswa V
+2025-06-16T13:09:46.821Z,unknown,unknown,0.0,Unknown,Confirmed,684fca4422821a1a194dae6a,400.0,Mukilan,Viswa V
+2025-06-16T16:53:15.359Z,specification,Satin,5000.0,100% Cotton,Confirmed,684ffea422821a1a194e0869,75.0,Mukilan,Maharaajan
+2025-06-17T12:12:46.583Z,premium,Linen,120.0,70% Mixed,Confirmed,68510e6722821a1a194e4837,400.0,Mukilan,ciwo
+2025-07-05T14:11:26.226Z,grade_40s,Plain,25000.0,100% Cotton,Processed,6868e53b2e178097f7ed693b,0.0,Mukilan,Azhagarsamy
+2025-07-09T13:03:42.202Z,specification,Plain,84000.0,Mixed,Confirmed,686e1b564013003d98194b2f,0.815,Mukilan,palaniappan
+2025-07-09T13:08:35.433Z,specification,Twill,100000.0,Cotton x Cotton,Confirmed,686e166e4013003d9818d8bb,80.0,Devaraj,Nandhakumar T
+2025-07-09T13:19:45.923Z,specification,Plain,50000.0,Cotton x Cotton,Declined,686e190d4013003d98192efc,70.0,Devaraj,Nandhakumar T
+2025-07-09T12:42:35.559Z,specification,Twill,5000.0,Cotton x Cotton,Confirmed,686e16644013003d9818d89f,0.0,Boopalan,palaniappan
+2025-07-09T12:58:37.850Z,specification,Plain,3000.0,Cotton x Cotton,Declined,686e1a264013003d98193c6a,0.0,Boopalan,palaniappan
+2025-07-19T13:08:35.433Z,specification,Twill,10000.0,Cotton x Cotton,Confirmed,686e166e4013003d9818d8bb,80.0,Devaraj,Nandhakumar T

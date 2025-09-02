@@ -274,7 +274,11 @@ const Dashboard = () => {
       if (response.success && response.data) {
         setChats(prev => [response.data!, ...prev]);
         setCurrentChatId(response.data!.id);
-        // Toast notification removed - no popup for new chat creation
+        toast({
+          title: "New Chat Created",
+          description: "You can now start your analysis.",
+          variant: "default",
+        });
       } else {
         throw new Error(response.error || "Failed to create chat");
       }
@@ -383,11 +387,13 @@ const Dashboard = () => {
         <div className="flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-primary" />
           <h1 className="text-lg font-semibold">Sales Chatbot</h1>
-          {isBackendConnected ? (
-            <Wifi className="h-4 w-4 text-green-500" />
-          ) : (
-            <WifiOff className="h-4 w-4 text-red-500" />
-          )}
+          <ScrollArea className="max-h-[440px] pr-4" style={{ scrollbarWidth: 'thin' }}>
+            {isBackendConnected ? (
+              <Wifi className="h-4 w-4 text-green-500" />
+            ) : (
+              <WifiOff className="h-4 w-4 text-red-500" />
+            )}
+          </ScrollArea>
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
@@ -674,122 +680,140 @@ const Dashboard = () => {
       
       {/* Festival Notifications Popup Modal */}
       <Dialog open={showFestivalPopup} onOpenChange={setShowFestivalPopup}>
-        <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-orange-800 dark:text-orange-200 text-xl">
-              <Calendar className="h-6 w-6" />
-              🎉 Upcoming Festivals & Events
+        <DialogContent className="max-w-[95vw] w-[900px] max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader className="px-6 py-6 border-b border-border">
+            <DialogTitle className="flex items-center gap-3 text-orange-800 dark:text-orange-200 text-2xl font-bold">
+              <Calendar className="h-7 w-7" />
+              <span>Upcoming Festivals & Events</span>
             </DialogTitle>
-            <DialogDescription className="text-base">
-              💡 Update your inventory and promotions to maximize festival sales!
+            <DialogDescription className="text-lg mt-3 text-orange-700 dark:text-orange-300 font-medium">
+              <span className="inline-flex items-center gap-2">
+                <Sparkles className="h-5 w-5" />
+                Update your inventory and promotions to maximize festival sales!
+              </span>
             </DialogDescription>
           </DialogHeader>
           
-          <ScrollArea className="max-h-[60vh] pr-4">
-            <div className="space-y-4">
-              {upcomingFestivals.map((festival, index) => (
-                <div key={index} className="bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-950/20 dark:to-red-950/20 rounded-lg p-5 border border-orange-200 dark:border-orange-800 shadow-sm">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <Gift className="h-6 w-6 text-orange-600" />
-                      <div>
-                        <h3 className="font-bold text-lg text-gray-900 dark:text-white">
-                          {festival.name}
-                        </h3>
-                        <span className="text-sm px-3 py-1 bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 rounded-full">
-                          {festival.category}
+          {/* Scrollable Content Area */}
+          <div className="flex-1 overflow-hidden">
+            <ScrollArea className="h-full px-6 py-4">
+              <div className="space-y-6 pr-4">
+                {upcomingFestivals.map((festival, index) => (
+                  <div key={index} className="bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-950/20 dark:to-red-950/20 rounded-xl p-6 border border-orange-200 dark:border-orange-800 shadow-md">
+                    {/* Festival Header */}
+                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+                      <div className="flex items-center gap-4">
+                        <div className="p-2 bg-orange-100 dark:bg-orange-900/50 rounded-full">
+                          <Gift className="h-6 w-6 text-orange-600" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-xl text-gray-900 dark:text-white mb-2">
+                            {festival.name}
+                          </h3>
+                          <span className="inline-block px-3 py-1 bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 rounded-full text-sm font-semibold">
+                            {festival.category}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-center md:text-right">
+                        <span className="text-lg font-bold text-orange-600 bg-white/80 dark:bg-gray-800/80 px-4 py-2 rounded-full">
+                          {festival.is_today ? "🎉 Today!" : `⏰ ${festival.days_until} days`}
                         </span>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <span className="text-lg font-bold text-orange-600">
-                        {festival.is_today ? "🎉 Today!" : `⏰ ${festival.days_until} days`}
-                      </span>
+                    
+                    {/* Recommendations Grid */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      {/* Stock Updates */}
+                      {festival.recommendations.stock_updates.length > 0 && (
+                        <div className="bg-white/90 dark:bg-gray-900/90 rounded-lg p-5 border border-blue-200 dark:border-blue-800 shadow-sm">
+                          <h4 className="font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-2 mb-3 text-base">
+                            <span className="text-lg">📦</span>
+                            Stock Updates
+                          </h4>
+                          <ul className="space-y-2">
+                            {festival.recommendations.stock_updates.map((item, i) => (
+                              <li key={i} className="text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2">
+                                <span className="text-blue-500 mt-1 flex-shrink-0">•</span>
+                                <span className="leading-relaxed">{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      
+                      {/* Discount Suggestions */}
+                      {festival.recommendations.discount_suggestions.length > 0 && (
+                        <div className="bg-white/90 dark:bg-gray-900/90 rounded-lg p-5 border border-green-200 dark:border-green-800 shadow-sm">
+                          <h4 className="font-semibold text-green-600 dark:text-green-400 flex items-center gap-2 mb-3 text-base">
+                            <span className="text-lg">💰</span>
+                            Discount Suggestions
+                          </h4>
+                          <ul className="space-y-2">
+                            {festival.recommendations.discount_suggestions.map((item, i) => (
+                              <li key={i} className="text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2">
+                                <span className="text-green-500 mt-1 flex-shrink-0">•</span>
+                                <span className="leading-relaxed">{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      
+                      {/* Marketing Tips */}
+                      {festival.recommendations.marketing_tips.length > 0 && (
+                        <div className="bg-white/90 dark:bg-gray-900/90 rounded-lg p-5 border border-purple-200 dark:border-purple-800 shadow-sm">
+                          <h4 className="font-semibold text-purple-600 dark:text-purple-400 flex items-center gap-2 mb-3 text-base">
+                            <span className="text-lg">📈</span>
+                            Marketing Tips
+                          </h4>
+                          <ul className="space-y-2">
+                            {festival.recommendations.marketing_tips.map((item, i) => (
+                              <li key={i} className="text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2">
+                                <span className="text-purple-500 mt-1 flex-shrink-0">•</span>
+                                <span className="leading-relaxed">{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
                   </div>
-                  
-                  {/* Recommendations Grid */}
-                  <div className="grid md:grid-cols-3 gap-4">
-                    {festival.recommendations.stock_updates.length > 0 && (
-                      <div className="bg-white/70 dark:bg-gray-900/70 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
-                        <h4 className="font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-2 mb-3">
-                          📦 Stock Updates
-                        </h4>
-                        <ul className="space-y-1">
-                          {festival.recommendations.stock_updates.map((item, i) => (
-                            <li key={i} className="text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2">
-                              <span className="text-blue-500 mt-1">•</span>
-                              {item}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    
-                    {festival.recommendations.discount_suggestions.length > 0 && (
-                      <div className="bg-white/70 dark:bg-gray-900/70 rounded-lg p-4 border border-green-200 dark:border-green-800">
-                        <h4 className="font-semibold text-green-600 dark:text-green-400 flex items-center gap-2 mb-3">
-                          💰 Discount Suggestions
-                        </h4>
-                        <ul className="space-y-1">
-                          {festival.recommendations.discount_suggestions.map((item, i) => (
-                            <li key={i} className="text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2">
-                              <span className="text-green-500 mt-1">•</span>
-                              {item}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    
-                    {festival.recommendations.marketing_tips.length > 0 && (
-                      <div className="bg-white/70 dark:bg-gray-900/70 rounded-lg p-4 border border-purple-200 dark:border-purple-800">
-                        <h4 className="font-semibold text-purple-600 dark:text-purple-400 flex items-center gap-2 mb-3">
-                          📈 Marketing Tips
-                        </h4>
-                        <ul className="space-y-1">
-                          {festival.recommendations.marketing_tips.map((item, i) => (
-                            <li key={i} className="text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2">
-                              <span className="text-purple-500 mt-1">•</span>
-                              {item}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
           
-          <div className="flex justify-between items-center gap-3 mt-6 pt-4 border-t">
-            <div className="text-sm text-gray-600 dark:text-gray-400">
-              💡 Pro Tip: Plan ahead for better sales performance!
-            </div>
-            <div className="flex gap-3">
-              <Button 
-                onClick={handleGoToChat}
-                disabled={!isBackendConnected || upcomingFestivals.length === 0}
-                variant="outline" 
-                className="px-6 border-primary text-primary hover:bg-primary hover:text-primary-foreground"
-              >
-                <MessageCircle className="h-4 w-4 mr-2" />
-                Go to Chat
-              </Button>
-              <Button 
-                variant="outline" 
-                onClick={handleRemindLater}
-                className="px-6"
-              >
-                Remind Later
-              </Button>
-              <Button 
-                onClick={handleGotIt}
-                className="bg-orange-600 hover:bg-orange-700 px-6"
-              >
-                Got It! 🎯
-              </Button>
+          {/* Footer Actions */}
+          <div className="px-6 py-6 border-t border-border bg-gray-50/50 dark:bg-gray-900/50">
+            <div className="flex flex-col lg:flex-row justify-between items-center gap-4">
+              <div className="text-sm text-gray-600 dark:text-gray-400 font-medium text-center lg:text-left">
+                💡 Pro Tip: Plan ahead for better sales performance!
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+                <Button 
+                  onClick={handleGoToChat}
+                  disabled={!isBackendConnected || upcomingFestivals.length === 0}
+                  variant="outline" 
+                  className="w-full sm:w-auto px-6 py-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground font-semibold"
+                >
+                  <MessageCircle className="h-4 w-4 mr-2" />
+                  Go to Chat
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={handleRemindLater}
+                  className="w-full sm:w-auto px-6 py-2 font-semibold"
+                >
+                  Remind Later
+                </Button>
+                <Button 
+                  onClick={handleGotIt}
+                  className="w-full sm:w-auto bg-orange-600 hover:bg-orange-700 px-6 py-2 font-semibold text-white"
+                >
+                  Got It! 🎯
+                </Button>
+              </div>
             </div>
           </div>
         </DialogContent>
