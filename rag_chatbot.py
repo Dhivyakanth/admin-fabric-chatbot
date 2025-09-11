@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 import pandas as pd
 import os
 import re
+import hashlib
+import json
 from fetch_and_append import update_csv
 from cache_manager import CacheManager
 from numerical_analyzer import create_numerical_analyzer
@@ -16,6 +18,71 @@ from spell_corrector import SpellCorrector
 import calendar
 from datetime import datetime
 load_dotenv()
+def get_data_hash(csv_path):
+    """
+    Generate a hash of the CSV data to detect changes.
+    
+    Args:
+        csv_path (str): Path to the CSV file
+        
+    Returns:
+        str: MD5 hash of the CSV data
+    """
+    try:
+        # Read the CSV file and sort by _id to ensure consistent ordering
+        df = pd.read_csv(csv_path)
+        if '_id' in df.columns:
+            df = df.sort_values('_id').reset_index(drop=True)
+        
+        # Convert to JSON string for hashing
+        data_string = df.to_json()
+        
+        # Generate and return hash
+        return hashlib.md5(data_string.encode('utf-8')).hexdigest()
+    except Exception as e:
+        print(f"[!] Error generating data hash: {e}")
+        return None
+
+
+def save_embedding_metadata(embedding_cache_path, data_hash):
+    """
+    Save metadata about the embeddings including the data hash.
+    
+    Args:
+        embedding_cache_path (str): Path to the embedding cache directory
+        data_hash (str): Hash of the data used to create embeddings
+    """
+    try:
+        metadata = {
+            'data_hash': data_hash,
+            'created_at': time.time()
+        }
+        metadata_path = os.path.join(embedding_cache_path, 'metadata.json')
+        with open(metadata_path, 'w') as f:
+            json.dump(metadata, f)
+    except Exception as e:
+        print(f"[!] Error saving embedding metadata: {e}")
+
+
+def load_embedding_metadata(embedding_cache_path):
+    """
+    Load metadata about the embeddings including the data hash.
+    
+    Args:
+        embedding_cache_path (str): Path to the embedding cache directory
+        
+    Returns:
+        dict: Metadata dictionary or None if not found
+    """
+    try:
+        metadata_path = os.path.join(embedding_cache_path, 'metadata.json')
+        if os.path.exists(metadata_path):
+            with open(metadata_path, 'r') as f:
+                return json.load(f)
+        return None
+    except Exception as e:
+        print(f"[!] Error loading embedding metadata: {e}")
+        return None
 
 def strip_summary_sections(response_text):
     """
@@ -99,18 +166,56 @@ import os
 embedding_cache_path = "chromadb/faiss_index"
 
 try:
+    # Generate hash of current data
+    current_data_hash = get_data_hash("data/database_data.csv")
+    print(f"[#] Current data hash: {current_data_hash}")
+    
+    # Check if we have cached embeddings and metadata
     if os.path.exists(embedding_cache_path) and os.path.isdir(embedding_cache_path):
-        print("[#] Loading embeddings from cache...")
-        embedding = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-        vectordb = FAISS.load_local(embedding_cache_path, embedding, allow_dangerous_deserialization=True)
-        print("[OK] Embeddings loaded from cache!")
+        # Load metadata to check if data has changed
+        metadata = load_embedding_metadata(embedding_cache_path)
+        
+        if metadata and 'data_hash' in metadata:
+            cached_data_hash = metadata['data_hash']
+            print(f"[#] Cached data hash: {cached_data_hash}")
+            
+            # Compare hashes to determine if data has changed
+            if current_data_hash == cached_data_hash:
+                print("[#] Loading embeddings from cache (data unchanged)...")
+                embedding = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+                vectordb = FAISS.load_local(embedding_cache_path, embedding, allow_dangerous_deserialization=True)
+                print("[OK] Embeddings loaded from cache!")
+            else:
+                print("[#] Data has changed, creating new embeddings...")
+                embedding = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+                vectordb = FAISS.from_documents(docs, embedding)
+                # Save embeddings to cache for next time
+                os.makedirs(embedding_cache_path, exist_ok=True)
+                vectordb.save_local(embedding_cache_path)
+                # Save metadata with new hash
+                save_embedding_metadata(embedding_cache_path, current_data_hash)
+                print("[OK] New embeddings created and cached!")
+        else:
+            # No metadata or no hash in metadata, recreate embeddings
+            print("[#] No metadata found, creating new embeddings...")
+            embedding = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+            vectordb = FAISS.from_documents(docs, embedding)
+            # Save embeddings to cache for next time
+            os.makedirs(embedding_cache_path, exist_ok=True)
+            vectordb.save_local(embedding_cache_path)
+            # Save metadata with new hash
+            save_embedding_metadata(embedding_cache_path, current_data_hash)
+            print("[OK] Embeddings created and cached!")
     else:
-        print("[#] Creating new embeddings...")
+        # No cache exists, create new embeddings
+        print("[#] No cache found, creating new embeddings...")
         embedding = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
         vectordb = FAISS.from_documents(docs, embedding)
         # Save embeddings to cache for next time
         os.makedirs(embedding_cache_path, exist_ok=True)
         vectordb.save_local(embedding_cache_path)
+        # Save metadata with new hash
+        save_embedding_metadata(embedding_cache_path, current_data_hash)
         print("[OK] Embeddings created and cached!")
 except Exception as e:
     print(f"[X] Error with local embeddings: {e}")

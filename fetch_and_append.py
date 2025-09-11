@@ -2,7 +2,7 @@ import requests
 import pandas as pd
 import os
 
-API_URL = "http://54.234.201.60:5000/chat/getFormData"
+API_URL = "http://54.234.201.60:5000/chat/getFormDataForAi"
 CSV_PATH = "data/database_data.csv"
 
 
@@ -47,7 +47,7 @@ def update_csv():
 
     if os.path.exists(CSV_PATH):
         old_df = pd.read_csv(CSV_PATH)
-        combined_df = pd.concat([old_df, new_df]).drop_duplicates().reset_index(drop=True)
+        combined_df = pd.concat([old_df, new_df]).drop_duplicates(subset=['_id']).reset_index(drop=True)
         print(f"[INFO] Combined data: {len(old_df)} existing + {len(new_df)} new = {len(combined_df)} total records")
     else:
         combined_df = new_df
