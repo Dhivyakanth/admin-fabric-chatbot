@@ -25,3 +25,17 @@ date,quality,weave,quantity,composition,status,_id,rate,agentName,customerName
 2025-08-29T10:32:48.610Z,ghj,ghhh,hhh,ghhu,Processed,68b13479983d8d291d23ce36,0.0,Mukilan,simeon
 2025-08-29T10:32:58.015Z,ghjbv,hhuij,ghj,vcghnh,Declined,68b13482983d8d291d23ce48,0.0,Mukilan,simeon
 2025-08-29T10:33:07.260Z,ghghv,ggbbn,vnnj,bbbttt,Confirmed,68b1348b983d8d291d23ce5c,0.0,Mukilan,simeon
+2025-09-02T23:49:21.913Z,gg,dff,1,dfg,Confirmed,68b7352b983d8d291d240893,0.0,Viswa,Viswa
+2025-09-02T23:49:38.651Z,gg,dff,1,dfg,Confirmed,68b7353c983d8d291d2408b7,0.0,Viswa,Viswa
+2025-09-02T23:57:12.430Z,1,d,e,d,Confirmed,68b73702983d8d291d240aa5,0.0,Viswa,Viswa
+2025-09-03T00:21:04.665Z,ww,w,d,w,Confirmed,68b73c9a983d8d291d240e55,0.0,Viswa,Viswa
+2025-09-03T00:31:58.123Z,q,q,q,q,Declined,68b73f28983d8d291d240f7a,0.0,Viswa,Viswa
+2025-09-03T21:22:06.668Z,ww,qw,ww,er,Declined,68b8642c983d8d291d2412d9,0.0,Viswa,Viswa
+2025-09-03T21:26:26.366Z,ty,ddd,kk,d,Processed,68b86530983d8d291d2416bf,0.0,Viswa,Viswa
+2025-09-03T21:29:50.185Z,kl,kl,ll,jj,Declined,68b865fb983d8d291d2418c3,0.0,Viswa,Viswa
+2025-09-03T21:33:17.840Z,fg,er,qw,q,Declined,68b866cb983d8d291d241b7d,0.0,Viswa,Viswa
+2025-09-03T21:35:49.033Z,w,qq,q,w,Declined,68b86762983d8d291d241dd8,0.0,Viswa,Viswa
+2025-09-04T14:05:05.390Z,qw,ed,aa,qw,Declined,68b94f40983d8d291d242f93,0.0,Viswa,Viswa
+2025-09-04T14:05:24.219Z,qq,a,q,a,Confirmed,68b94f53983d8d291d242ffd,0.0,Viswa,Viswa
+2025-09-05T10:59:08.337Z,kk,nm,hh,hh,Processed,68ba752b983d8d291d2437a0,0.0,Devaraj,Viswa
+2025-09-05T10:59:39.509Z,kl,y,jk,y,Processed,68ba754a983d8d291d24381e,0.0,Devaraj,Viswa

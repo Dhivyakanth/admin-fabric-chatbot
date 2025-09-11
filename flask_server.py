@@ -4,9 +4,13 @@ import json
 import uuid
 from datetime import datetime
 from rag_chatbot import chatbot_ask
+from livedata_integration import fetch_sales_data_from_api, generate_response
 from config import Config
 import traceback
 import re
+from chat_history_manager import save_chat_history, load_chat_history, is_chat_history_full, delete_oldest_chat, get_all_chat_files
+# Use MongoDB instead of SQLite3 for chat history
+from Mongodb import save_chat_history_mongo as save_chat_history_db, load_chat_history_mongo as load_chat_history_db, get_all_chats_mongo as get_all_chats_db, delete_chat_mongo as delete_chat_db, chat_exists_in_mongo as chat_exists_in_db
 
 def strip_summary_sections(response_text):
     """
@@ -77,7 +81,7 @@ def create_new_chat():
         return jsonify({
             "success": True,
             "chat_id": chat_id,
-            "chat": chat_sessions[chat_id]
+            "data": chat_sessions[chat_id]
         }), 201
         
     except Exception as e:
@@ -101,11 +105,39 @@ def send_message(chat_id):
                 "error": "Message cannot be empty"
             }), 400
         
+        # If chat session is not in memory, try to load it
         if chat_id not in chat_sessions:
-            return jsonify({
-                "success": False,
-                "error": "Chat session not found"
-            }), 404
+            # First try to load from database
+            if chat_exists_in_db(chat_id):
+                loaded_messages = load_chat_history_db(chat_id)
+                if loaded_messages is not None:
+                    # Create a session from the loaded data
+                    chat_sessions[chat_id] = {
+                        "id": chat_id,
+                        "title": "Loaded Chat" if not loaded_messages else loaded_messages[0].get('content', '')[:30] + ("..." if len(loaded_messages[0].get('content', '')) > 30 else ""),
+                        "messages": loaded_messages,
+                        "created_at": loaded_messages[0].get('timestamp', datetime.now().isoformat()) if loaded_messages else datetime.now().isoformat(),
+                        "last_updated": loaded_messages[-1].get('timestamp', datetime.now().isoformat()) if loaded_messages else datetime.now().isoformat()
+                    }
+            else:
+                # Try to load from CSV file (backward compatibility)
+                loaded_messages = load_chat_history(chat_id)
+                if loaded_messages is not None:
+                    # Create a session from the loaded data
+                    chat_sessions[chat_id] = {
+                        "id": chat_id,
+                        "title": "Loaded Chat" if not loaded_messages else loaded_messages[0].get('content', '')[:30] + ("..." if len(loaded_messages[0].get('content', '')) > 30 else ""),
+                        "messages": loaded_messages,
+                        "created_at": loaded_messages[0].get('timestamp', datetime.now().isoformat()) if loaded_messages else datetime.now().isoformat(),
+                        "last_updated": loaded_messages[-1].get('timestamp', datetime.now().isoformat()) if loaded_messages else datetime.now().isoformat()
+                    }
+                    # Save to database for future use
+                    save_chat_history_db(chat_id, loaded_messages, chat_sessions[chat_id]["title"])
+                else:
+                    return jsonify({
+                        "success": False,
+                        "error": "Chat session not found"
+                    }), 404
         
         # Add user message to chat history
         user_msg = {
@@ -137,10 +169,10 @@ def send_message(chat_id):
                 })
         
         # Generate AI response using rag_chatbot backend
-        print(f"🔍 Processing isolated message: {user_message}")
-        print(f"📊 Isolated chat history length: {len(isolated_chat_history)}")
+        print(f"[#] Processing isolated message: {user_message}")
+        print(f"[#] Isolated chat history length: {len(isolated_chat_history)}")
 
-        ai_response = chatbot_ask(user_message, session_id=chat_id)
+        ai_response = chatbot_ask(user_message, session_id=chat_id, chat_history=isolated_chat_history)
         # Strip summary sections from the response
         stripped_response = strip_summary_sections(ai_response)
 
@@ -165,18 +197,24 @@ def send_message(chat_id):
             chat_sessions[chat_id]["title"] = user_message[:30] + ("..." if len(user_message) > 30 else "")
 
         chat_sessions[chat_id]["last_updated"] = datetime.now().isoformat()
+        
+        # Save chat history to database
+        save_chat_history_db(chat_id, chat_sessions[chat_id]["messages"], chat_sessions[chat_id]["title"])
 
         return jsonify({
             "success": True,
             "user_message": user_msg,
             "ai_response": ai_msg,
-            "chat": {
-                "id": chat_sessions[chat_id]["id"],
-                "title": chat_sessions[chat_id]["title"],
-                "messages": chat_sessions[chat_id]["messages"],
-                "created_at": chat_sessions[chat_id]["created_at"],
-                "last_updated": chat_sessions[chat_id]["last_updated"]
+            "data": {
+                "chat": {
+                    "id": chat_sessions[chat_id]["id"],
+                    "title": chat_sessions[chat_id]["title"],
+                    "messages": chat_sessions[chat_id]["messages"],
+                    "created_at": chat_sessions[chat_id]["created_at"],
+                    "last_updated": chat_sessions[chat_id]["last_updated"]
+                }
             },
+            
             "response_metadata": {
                 "validated": True,
                 "source": "rag_chatbot",
@@ -188,15 +226,17 @@ def send_message(chat_id):
         }), 200
         
     except Exception as e:
-        print(f"❌ Error sending message: {str(e)}")
+        print(f"[X] Error sending message: {str(e)}")
         traceback.print_exc()
+        user_message_safe = locals().get('user_message', "N/A")
         return jsonify({
             "success": False,
             "error": str(e),
             "error_details": {
                 "timestamp": datetime.now().isoformat(),
                 "chat_id": chat_id,
-                "user_message": user_message if 'user_message' in locals() else "N/A"
+                "user_message": user_message if 'user_message' in locals() else "N/A",
+                "user_message": user_message_safe
             }
         }), 500
 
@@ -205,14 +245,41 @@ def get_chat(chat_id):
     """Get a specific chat session"""
     try:
         if chat_id not in chat_sessions:
-            return jsonify({
-                "success": False,
-                "error": "Chat session not found"
-            }), 404
+            # First try to load from database
+            if chat_exists_in_db(chat_id):
+                loaded_messages = load_chat_history_db(chat_id)
+                if loaded_messages is not None:
+                    # Create a session from the loaded data
+                    chat_sessions[chat_id] = {
+                        "id": chat_id,
+                        "title": "Loaded Chat" if not loaded_messages else loaded_messages[0].get('content', '')[:30] + ("..." if len(loaded_messages[0].get('content', '')) > 30 else ""),
+                        "messages": loaded_messages,
+                        "created_at": loaded_messages[0].get('timestamp', datetime.now().isoformat()) if loaded_messages else datetime.now().isoformat(),
+                        "last_updated": loaded_messages[-1].get('timestamp', datetime.now().isoformat()) if loaded_messages else datetime.now().isoformat()
+                    }
+            else:
+                # Try to load from CSV file (backward compatibility)
+                loaded_messages = load_chat_history(chat_id)
+                if loaded_messages is not None:
+                    # Create a session from the loaded data
+                    chat_sessions[chat_id] = {
+                        "id": chat_id,
+                        "title": "Loaded Chat" if not loaded_messages else loaded_messages[0].get('content', '')[:30] + ("..." if len(loaded_messages[0].get('content', '')) > 30 else ""),
+                        "messages": loaded_messages,
+                        "created_at": loaded_messages[0].get('timestamp', datetime.now().isoformat()) if loaded_messages else datetime.now().isoformat(),
+                        "last_updated": loaded_messages[-1].get('timestamp', datetime.now().isoformat()) if loaded_messages else datetime.now().isoformat()
+                    }
+                    # Save to database for future use
+                    save_chat_history_db(chat_id, loaded_messages, chat_sessions[chat_id]["title"])
+                else:
+                    return jsonify({
+                        "success": False,
+                        "error": "Chat session not found"
+                    }), 404
         
         return jsonify({
             "success": True,
-            "chat": chat_sessions[chat_id]
+            "data": chat_sessions[chat_id]
         }), 200
         
     except Exception as e:
@@ -226,13 +293,45 @@ def get_chat(chat_id):
 def get_all_chats():
     """Get all chat sessions"""
     try:
-        chats = list(chat_sessions.values())
+        # Get chats from database
+        chats = get_all_chats_db()
+        
+        # Add in-memory chats that aren't in database
+        for chat_id, chat_data in chat_sessions.items():
+            # Check if chat exists in database
+            if not chat_exists_in_db(chat_id):
+                chats.append(chat_data)
+        
+        # Load persisted CSV chats that aren't in memory or database (backward compatibility)
+        chat_files = get_all_chat_files()
+        for file in chat_files:
+            # Extract chat ID from filename
+            chat_id = file.replace('chat_', '').replace('.csv', '')
+            
+            # Skip if already in memory or database
+            if chat_id in chat_sessions or chat_exists_in_db(chat_id):
+                continue
+                
+            # Load chat from file
+            loaded_messages = load_chat_history(chat_id)
+            if loaded_messages is not None:
+                chat_data = {
+                    "id": chat_id,
+                    "title": "Loaded Chat" if not loaded_messages else loaded_messages[0].get('content', '')[:30] + ("..." if len(loaded_messages[0].get('content', '')) > 30 else ""),
+                    "messages": loaded_messages,
+                    "created_at": loaded_messages[0].get('timestamp', datetime.now().isoformat()) if loaded_messages else datetime.now().isoformat(),
+                    "last_updated": loaded_messages[-1].get('timestamp', datetime.now().isoformat()) if loaded_messages else datetime.now().isoformat()
+                }
+                chats.append(chat_data)
+                # Save to database for future use
+                save_chat_history_db(chat_id, loaded_messages, chat_data["title"])
+        
         # Sort by last_updated (newest first)
         chats.sort(key=lambda x: x["last_updated"], reverse=True)
         
         return jsonify({
             "success": True,
-            "chats": chats
+            "data": chats
         }), 200
         
     except Exception as e:
@@ -246,13 +345,18 @@ def get_all_chats():
 def delete_chat(chat_id):
     """Delete a specific chat session"""
     try:
-        if chat_id not in chat_sessions:
-            return jsonify({
-                "success": False,
-                "error": "Chat session not found"
-            }), 404
+        # Remove from memory if present
+        if chat_id in chat_sessions:
+            del chat_sessions[chat_id]
         
-        del chat_sessions[chat_id]
+        # Delete from database
+        delete_chat_db(chat_id)
+        
+        # Delete the CSV file if it exists (backward compatibility)
+        import os
+        csv_file = os.path.join("chat_history", f"chat_{chat_id}.csv")
+        if os.path.exists(csv_file):
+            os.remove(csv_file)
         
         return jsonify({
             "success": True,
@@ -273,6 +377,17 @@ def clear_all_chats():
         global chat_sessions
         chat_sessions.clear()
         
+        # Clear database (MongoDB version)
+        from Mongodb import clear_all_chats_mongo
+        clear_all_chats_mongo()
+        
+        # Clear all CSV files (backward compatibility)
+        import os
+        import shutil
+        if os.path.exists("chat_history"):
+            shutil.rmtree("chat_history")
+            os.makedirs("chat_history")
+        
         return jsonify({
             "success": True,
             "message": "All chat sessions cleared successfully"
@@ -291,9 +406,12 @@ def get_sales_data():
     try:
         # Use EXACT SAME functions as livedata_integration.py
         all_sales_data = fetch_sales_data_from_api()
+
         confirmed_sales_data = filter_confirmed_orders(all_sales_data) if all_sales_data else []
-        
-        print(f"📊 Fetched sales data - Total: {len(all_sales_data) if all_sales_data else 0}, Confirmed: {len(confirmed_sales_data)}")
+
+        confirmed_sales_data = [record for record in all_sales_data if record.get('status', '').lower() == 'confirmed']
+
+        print(f"[#] Fetched sales data - Total: {len(all_sales_data) if all_sales_data else 0}, Confirmed: {len(confirmed_sales_data)}")
         
          # Debug: Show actual confirmed weave counts
         if confirmed_sales_data:
@@ -301,10 +419,10 @@ def get_sales_data():
              for record in confirmed_sales_data:
                  weave = record.get('weave', 'Unknown').strip()
                  weave_debug[weave] = weave_debug.get(weave, 0) + 1
-             print(f"🔍 ACTUAL confirmed weave counts: {weave_debug}")        
+             print(f"[#] ACTUAL confirmed weave counts: {weave_debug}")        
          # Verify data consistency
         if all_sales_data:
-             print(f"🔍 Sample record keys: {list(all_sales_data[0].keys()) if all_sales_data else 'No data'}")
+             print(f"[#] Sample record keys: {list(all_sales_data[0].keys()) if all_sales_data else 'No data'}")
         
         return jsonify({
              "success": True,
@@ -325,7 +443,7 @@ def get_sales_data():
          }), 200
         
     except Exception as e:
-         print(f"❌ Error fetching sales data: {str(e)}")
+         print(f"[X] Error fetching sales data: {str(e)}")
          return jsonify({
              "success": False,
              "error": str(e),
@@ -352,10 +470,15 @@ def get_upcoming_festivals():
             {"name": "Independence Day", "date": "2025-08-15", "category": "National Holiday"},
             {"name": "Janmashtami", "date": "2025-08-26", "category": "Festival"},
             {"name": "Ganesh Chaturthi", "date": "2025-08-29", "category": "Festival"},
+
+            {"name": "Ganesh Chaturthi", "date": "2025-08-27", "category": "Festival"},
+
             {"name": "Gandhi Jayanti", "date": "2025-10-02", "category": "National Holiday"},
             {"name": "Dussehra", "date": "2025-10-22", "category": "Festival"},
             {"name": "Diwali", "date": "2025-11-01", "category": "Festival"},
             {"name": "Christmas", "date": "2025-12-25", "category": "Religious"},
+            {"name": "Onam", "date": "2025-09-05", "category": "Cultural"},
+
             
             # Valentine's Day and other commercial festivals
             {"name": "Valentine's Day", "date": "2025-02-14", "category": "Commercial"},
@@ -419,9 +542,9 @@ def get_festival_recommendations(festival_name, category):
         current_month = datetime.now().month
         current_year = datetime.now().year
 
-        print(f"🔍 Analyzing recommendations for {festival_name} ({category})")
-        print(f"📅 Current month: {current_month}, Current year: {current_year}")
-        print(f"📊 Total sales records: {len(sales_data) if sales_data else 0}")
+        print(f"[#] Analyzing recommendations for {festival_name} ({category})")
+        print(f"[#] Current month: {current_month}, Current year: {current_year}")
+        print(f"[#] Total sales records: {len(sales_data) if sales_data else 0}")
 
         # Filter data for current month
         current_month_sales = []
@@ -443,7 +566,7 @@ def get_festival_recommendations(festival_name, category):
                     print(f"Date parsing error for record {record.get('_id', 'unknown')}: {e}")
                     continue
 
-        print(f"📈 Current month sales: {len(current_month_sales)}")
+        print(f"[#] Current month sales: {len(current_month_sales)}")
 
         # Analyze most sold items
         weave_counter = Counter()
@@ -458,9 +581,9 @@ def get_festival_recommendations(festival_name, category):
             if record.get('composition'):
                 composition_counter[record['composition']] += 1
         
-        print(f"👗 Weave analysis: {dict(weave_counter)}")
-        print(f"💎 Quality analysis: {dict(quality_counter)}")
-        print(f"🧵 Composition analysis: {dict(composition_counter)}")
+        print(f"[#] Weave analysis: {dict(weave_counter)}")
+        print(f"[#] Quality analysis: {dict(quality_counter)}")
+        print(f"[#] Composition analysis: {dict(composition_counter)}")
 
         # Get top items
         top_weave = weave_counter.most_common(1)
@@ -476,7 +599,7 @@ def get_festival_recommendations(festival_name, category):
         if top_composition:
             stock_recommendations.append(f"Focus on {top_composition[0][0]} composition (best performing)")
         
-        print(f"💡 Generated recommendations: {stock_recommendations}")
+        print(f"[#] Generated recommendations: {stock_recommendations}")
         
         # If no data available, use generic recommendations
         if not stock_recommendations:
@@ -492,7 +615,7 @@ def get_festival_recommendations(festival_name, category):
                     "Update inventory based on demand",
                     "Prepare seasonal collections"
                 ]
-            print(f"📋 Using fallback recommendations: {stock_recommendations}")
+            print(f"[#] Using fallback recommendations: {stock_recommendations}")
         
         recommendations["stock_updates"] = stock_recommendations
         
@@ -608,9 +731,9 @@ def validate_chat_response(chat_id):
         }
         
         # Log validation results
-        print(f"🔍 Validation results for chat {chat_id}: {validation_results}")
-        print(f"📝 Original response first 100 chars: {original_content[:100]}...")
-        print(f"📝 Validation response first 100 chars: {validation_response[:100]}...")
+        print(f"[#] Validation results for chat {chat_id}: {validation_results}")
+        print(f"[#] Original response first 100 chars: {original_content[:100]}...")
+        print(f"[#] Validation response first 100 chars: {validation_response[:100]}...")
         
         return jsonify({
             "success": True,
@@ -621,7 +744,7 @@ def validate_chat_response(chat_id):
         }), 200
         
     except Exception as e:
-        print(f"❌ Error validating chat response: {str(e)}")
+        print(f"[X] Error validating chat response: {str(e)}")
         traceback.print_exc()
         return jsonify({
             "success": False,
@@ -648,7 +771,11 @@ def debug_weave_counts():
     try:
         # Fetch data using the same functions
         all_sales_data = fetch_sales_data_from_api()
+
         confirmed_sales_data = filter_confirmed_orders(all_sales_data) if all_sales_data else []
+
+        confirmed_sales_data = [record for record in all_sales_data if record.get('status', '').lower() == 'confirmed']
+
         
         # Count weaves in confirmed orders
         weave_counts = {}
@@ -677,7 +804,7 @@ def debug_weave_counts():
         }), 200
         
     except Exception as e:
-        print(f"❌ Error in debug endpoint: {str(e)}")
+        print(f"[X] Error in debug endpoint: {str(e)}")
         return jsonify({
             "success": False,
             "error": str(e)
@@ -687,6 +814,7 @@ def debug_weave_counts():
 def debug_counts():
     """Debug endpoint to verify API data counts"""
     try:
+
         from livedata_Integeration import fetch_sales_data_from_api, filter_confirmed_orders, analyze_weave_types
 
         all_data = fetch_sales_data_from_api()
@@ -696,6 +824,14 @@ def debug_counts():
         # Month breakdown
         month_counts = {}
         for record in confirmed_data:
+
+        # Only use fetch_sales_data_from_api from livedata_integration
+            from livedata_integration import fetch_sales_data_from_api
+            all_data = fetch_sales_data_from_api()
+        # Month breakdown
+        month_counts = {}
+        for record in all_data:
+
             date_str = record.get('date', '')
             if date_str:
                 try:
@@ -707,15 +843,20 @@ def debug_counts():
                     month_counts[month_name] = month_counts.get(month_name, 0) + 1
                 except:
                     pass
-        
+
         return jsonify({
             "success": True,
             "debug_data": {
                 "total_records": len(all_data),
+
                 "confirmed_records": len(confirmed_data),
                 "confirmed_weave_counts": weave_counts,
                 "confirmed_month_counts": month_counts,
                 "sample_confirmed_record": confirmed_data[0] if confirmed_data else None,
+
+                "confirmed_month_counts": month_counts,
+                "sample_record": all_data[0] if all_data else None,
+
                 "timestamp": datetime.now().isoformat()
             }
         }), 200
@@ -758,18 +899,18 @@ def send_mail():
 if __name__ == '__main__':
     # Validate configuration before starting
     if not Config.validate_api_key():
-        print("❌ Cannot start server without proper configuration!")
+        print("[X] Cannot start server without proper configuration!")
         exit(1)
     
-    print("🚀 Starting Dress Sales Monitoring Chatbot API Server...")
-    print(f"📊 Sales API: {Config.SALES_API_URL}")
-    print(f"🌐 Server: http://{Config.FLASK_HOST}:{Config.FLASK_PORT}")
-    print(f"🔄 CORS Origins: {Config.CORS_ORIGINS}")
-    print("\n💡 Make sure your .env file contains GEMINI_API_KEY")
-    print("💡 Test the API at: http://127.0.0.1:8000/api/health")
-    print("🔍 Enhanced with response validation for accurate counting")
-    print("✅ Frontend responses will match livedata_integration.py exactly")
-    print("🎯 Same core logic, same data filtering, same tie detection")
+    print("[>] Starting Dress Sales Monitoring Chatbot API Server...")
+    print(f"[#] Sales API: {Config.SALES_API_URL}")
+    print(f"[#] Server: http://{Config.FLASK_HOST}:{Config.FLASK_PORT}")
+    print(f"[#] CORS Origins: {Config.CORS_ORIGINS}")
+    print("\n[!] Make sure your .env file contains GEMINI_API_KEY")
+    print("[!] Test the API at: http://127.0.0.1:8000/api/health")
+    print("[#] Enhanced with response validation for accurate counting")
+    print("[#] Frontend responses will match livedata_integration.py exactly")
+    print("[#] Same core logic, same data filtering, same tie detection")
     
     app.run(
         host=Config.FLASK_HOST,

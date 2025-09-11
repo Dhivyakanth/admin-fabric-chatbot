@@ -5,6 +5,8 @@ import os
 API_URL = "http://54.234.201.60:5000/chat/getFormData"
 CSV_PATH = "data/database_data.csv"
 
+
+
 def fetch_data_from_api():
     try:
         print(f"[INFO] Fetching data from API: {API_URL}")

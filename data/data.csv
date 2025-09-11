@@ -18,3 +18,25 @@ date,quality,weave,quantity,composition,status,_id,rate,agentName,customerName
 2025-07-09T12:42:35.559Z,specification,Twill,5000.0,Cotton x Cotton,Confirmed,686e16644013003d9818d89f,0.0,Boopalan,palaniappan
 2025-07-09T12:58:37.850Z,specification,Plain,3000.0,Cotton x Cotton,Declined,686e1a264013003d98193c6a,0.0,Boopalan,palaniappan
 2025-07-19T13:08:35.433Z,specification,Twill,10000.0,Cotton x Cotton,Confirmed,686e166e4013003d9818d8bb,80.0,Devaraj,Nandhakumar T
+2025-08-25T19:17:09.253Z,30 30 124 64 63,twill,10000.0,cotton by cotton ,Confirmed,68ac695d983d8d291d2385dd,72.0,Mukilan,palaniappan 
+2025-08-25T19:22:04.779Z,40 40 132 82 63,plain,50000.0,cotton ,Declined,68ac6a85983d8d291d23869f,81.0,Mukilan,palaniappan 
+2025-08-25T19:38:37.074Z,60 60 104 96 63,plain,84000.0,modal,Confirmed,68ac6e65983d8d291d2388e4,65.0,Devaraj,palaniappan 
+2025-08-25T19:48:17.610Z,40 40 133 82 67 ,mtrs,20000.0,mc x mc,Confirmed,68ac70aa983d8d291d238acd,80.0,Devaraj,palaniappan 
+2025-08-26T16:22:33.557Z,40401327263,Plain ,50000.0,cotton x cotton ,Declined,68ad91f1983d8d291d239729,70.0,K P MAHARAAJAN,Bhoobalan 
+2025-08-29T10:32:48.610Z,ghj,ghhh,,ghhu,Processed,68b13479983d8d291d23ce36,0.0,Mukilan,simeon
+2025-08-29T10:32:58.015Z,ghjbv,hhuij,,vcghnh,Declined,68b13482983d8d291d23ce48,0.0,Mukilan,simeon
+2025-08-29T10:33:07.260Z,ghghv,ggbbn,,bbbttt,Confirmed,68b1348b983d8d291d23ce5c,0.0,Mukilan,simeon
+2025-09-02T23:49:21.913Z,gg,dff,1.0,dfg,Confirmed,68b7352b983d8d291d240893,0.0,Viswa,Viswa
+2025-09-02T23:49:38.651Z,gg,dff,1.0,dfg,Confirmed,68b7353c983d8d291d2408b7,0.0,Viswa,Viswa
+2025-09-02T23:57:12.430Z,1,d,,d,Confirmed,68b73702983d8d291d240aa5,0.0,Viswa,Viswa
+2025-09-03T00:21:04.665Z,ww,w,,w,Confirmed,68b73c9a983d8d291d240e55,0.0,Viswa,Viswa
+2025-09-03T00:31:58.123Z,q,q,,q,Declined,68b73f28983d8d291d240f7a,0.0,Viswa,Viswa
+2025-09-03T21:22:06.668Z,ww,qw,,er,Declined,68b8642c983d8d291d2412d9,0.0,Viswa,Viswa
+2025-09-03T21:26:26.366Z,ty,ddd,,d,Processed,68b86530983d8d291d2416bf,0.0,Viswa,Viswa
+2025-09-03T21:29:50.185Z,kl,kl,,jj,Declined,68b865fb983d8d291d2418c3,0.0,Viswa,Viswa
+2025-09-03T21:33:17.840Z,fg,er,,q,Declined,68b866cb983d8d291d241b7d,0.0,Viswa,Viswa
+2025-09-03T21:35:49.033Z,w,qq,,w,Declined,68b86762983d8d291d241dd8,0.0,Viswa,Viswa
+2025-09-04T14:05:05.390Z,qw,ed,,qw,Declined,68b94f40983d8d291d242f93,0.0,Viswa,Viswa
+2025-09-04T14:05:24.219Z,qq,a,,a,Confirmed,68b94f53983d8d291d242ffd,0.0,Viswa,Viswa
+2025-09-05T10:59:08.337Z,kk,nm,,hh,Processed,68ba752b983d8d291d2437a0,0.0,Devaraj,Viswa
+2025-09-05T10:59:39.509Z,kl,y,,y,Processed,68ba754a983d8d291d24381e,0.0,Devaraj,Viswa

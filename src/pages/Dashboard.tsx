@@ -45,6 +45,79 @@ interface Festival {
 }
 
 const Dashboard = () => {
+  // Default admin questions grouped by category
+  const defaultQuestions = [
+    {
+      category: '🟣 Business Overview',
+      questions: [
+        'What is the largest single order placed (by quantity)?',
+        'Which customer has ordered the maximum quantity overall?',
+        'Who are the top 3 customers?',
+        'What is the total number of cancelled orders?',
+        'How many agents are handling orders?',
+      ],
+    },
+    {
+      category: '👤 Customer Insights',
+      questions: [
+        'Which customers have placed multiple orders?',
+        'Who are the customers that ordered the same composition but at different rates?',
+        'Which customer has the highest number of confirmed orders?',
+        'Are there customers who have only 0.0 rate orders?',
+      ],
+    },
+    {
+      category: '🧑‍💼 Agent Insights',
+      questions: [
+        'Which agent generated the highest revenue?',
+        'Who are the customers handled by multiple agents?',
+        'Which agent managed the maximum variety of weave types?',
+      ],
+    },
+    {
+      category: '🕒 Order & Trend Monitoring',
+      questions: [
+        'Which date had the highest number of orders?',
+        'How many orders were placed in the current month?',
+        'What is the difference in total quantity between confirmed and processed orders?',
+      ],
+    },
+  ];
+
+  // Handles clicking a default question button
+  const handleDefaultQuestionClick = async (question: string) => {
+    if (!isBackendConnected) return;
+    let chatId = currentChatId;
+    // Create new chat if none exists
+    if (!chatId) {
+      const response = await chatbotApi.createNewChat();
+      if (response.success && response.data) {
+        setChats(prev => [response.data!, ...prev]);
+        chatId = response.data!.id;
+        setCurrentChatId(chatId);
+      } else {
+        toast({ title: 'Error', description: response.error || 'Failed to create chat', variant: 'destructive' });
+        return;
+      }
+    }
+    setNewMessage("");
+    setIsTyping(true);
+    try {
+      const messageResponse = await chatbotApi.sendMessage(chatId, question);
+      if (messageResponse.success && messageResponse.data) {
+        setChats(prev => prev.map(chat => chat.id === chatId ? messageResponse.data!.chat : chat));
+        // Scroll to chat area
+        const chatArea = document.querySelector('.chat-messages');
+        if (chatArea) chatArea.scrollIntoView({ behavior: 'smooth' });
+      } else {
+        throw new Error(messageResponse.error || 'Failed to send message');
+      }
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message || 'Failed to send message', variant: 'destructive' });
+    } finally {
+      setIsTyping(false);
+    }
+  };
   const [chats, setChats] = useState<ApiChat[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState("");
@@ -444,6 +517,14 @@ const Dashboard = () => {
               <Mail className="h-4 w-4 mr-2" />
               Send Mail
             </Button>
+            <Button
+              onClick={() => window.open('http://localhost:3000/livechat/index.html', '_blank')}
+              disabled={!isBackendConnected}
+              className="w-full bg-gradient-primary hover:opacity-90 transition-smooth"
+            >
+              <MessageCircle className="h-4 w-4 mr-2" />
+              LiveChat
+            </Button>
             
             <Button 
               onClick={createNewChat}
@@ -645,34 +726,60 @@ const Dashboard = () => {
             </div>
           </>
         ) : (
-          // Welcome Screen
-          <div className="flex-1 flex items-center justify-center p-4">
-            <div className="text-center">
-              <div className="p-4 md:p-6 rounded-full bg-gradient-primary/10 w-16 h-16 md:w-24 md:h-24 mx-auto mb-4 md:mb-6 flex items-center justify-center">
+          // Welcome Screen + Default Questions
+          <div className="flex-1 flex justify-center" style={{ minHeight: '60vh' }}>
+            <div
+              className="w-full flex flex-col items-center justify-start"
+              style={{ marginTop: '20vh' }}
+            >
+              <div className="p-4 md:p-6 rounded-full bg-gradient-primary/10 w-16 h-16 md:w-24 md:h-24 flex items-center justify-center mb-4 md:mb-6">
                 <Sparkles className="h-8 w-8 md:h-12 md:w-12 text-primary" />
               </div>
-              <h2 className="text-xl md:text-2xl font-bold mb-4 bg-gradient-primary bg-clip-text text-transparent">
-                Welcome to Sales Analytics AI
+              <h2 className="text-xl md:text-2xl font-bold mb-3 bg-gradient-primary bg-clip-text text-transparent text-center">
+                Welcome to the Admin Fabric Dashboard! Ready to start your next analysis?
               </h2>
-              <p className="text-sm md:text-base text-muted-foreground mb-6 max-w-md mx-auto px-4">
-                Your intelligent sales data analysis assistant. Create a new chat to start exploring your fashion sales insights, trends, and predictions.
-              </p>
+              <div className="h-2" />
               {isBackendConnected ? (
-                <Button 
+                <Button
                   onClick={createNewChat}
-                  className="bg-gradient-primary hover:opacity-90 transition-smooth shadow-soft w-full md:w-auto"
+                  className="bg-gradient-primary hover:opacity-90 transition-smooth shadow-soft w-full md:w-auto mt-4 text-base font-semibold px-6 py-3"
                 >
-                  <Plus className="h-4 w-4 mr-2" />
                   Start New Analysis
                 </Button>
               ) : (
-                <Alert className="max-w-md mx-auto">
+                <Alert className="max-w-md mx-auto mt-4">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
                     Please start the backend server to begin analysis
                   </AlertDescription>
                 </Alert>
               )}
+
+              {/* Default Questions Section */}
+              <div className="mx-[10%] w-[80%] mt-10">
+                <h3 className="text-lg md:text-xl font-bold mb-6 text-center text-primary">Default Questions</h3>
+                <div className="space-y-[2%]">
+                  {defaultQuestions.map((cat, idx) => (
+                    <div key={cat.category} className="mb-8">
+                      <h4 className="font-semibold text-base md:text-lg mb-4 text-purple-700 dark:text-purple-300 flex items-center gap-2">
+                        {cat.category}
+                      </h4>
+                      <div className="space-y-[2%]">
+                        {cat.questions.map((q, qidx) => (
+                          <Button
+                            key={q}
+                            onClick={() => handleDefaultQuestionClick(q)}
+                            className="w-full px-6 py-4 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white text-base font-medium whitespace-normal text-left shadow-soft hover:from-purple-400 hover:to-pink-400 hover:shadow-lg transition-smooth"
+                            style={{ minHeight: '52px' }}
+                          >
+                            {q}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         )}

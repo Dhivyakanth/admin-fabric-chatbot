@@ -1,9 +1,15 @@
 # Core dependencies
 flask==3.0.0
 flask-cors==4.0.0
-google-generativeai==0.8.3
+google-generativeai
+langchain-google-genai
+langchain-core==0.3.12
+langchain-community==0.3.2
+faiss-cpu==1.9.0
 python-dotenv==1.0.0
 requests==2.31.0
+pymongo==4.8.0
+sentence-transformers==2.2
 
 # Optional dependencies for development
 python-dotenv==1.0.0

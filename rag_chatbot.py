@@ -1,5 +1,6 @@
 import time
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.chains import RetrievalQA
@@ -12,6 +13,8 @@ from cache_manager import CacheManager
 from numerical_analyzer import create_numerical_analyzer
 from smart_api_handler import create_smart_api_handler
 from spell_corrector import SpellCorrector
+import calendar
+from datetime import datetime
 load_dotenv()
 
 def strip_summary_sections(response_text):
@@ -45,7 +48,7 @@ def strip_summary_sections(response_text):
 
 # Check if Google API key is set
 if not os.getenv("GOOGLE_API_KEY"):
-    print("❌ Error: GOOGLE_API_KEY not found in environment variables.")
+    print("[X] Error: GOOGLE_API_KEY not found in environment variables.")
     print("Please add your Google API key to the .env file:")
     print("GOOGLE_API_KEY=your_actual_api_key_here")
     print("\nYou can get an API key from: https://makersuite.google.com/app/apikey")
@@ -61,36 +64,62 @@ def detect_numerical_query(question):
     ]
     return any(keyword in question.lower() for keyword in numerical_keywords)
 
-# --- Setup
+
 update_csv()
 data = pd.read_csv("data/database_data.csv")
+
+
 text_data = "\n".join([str(row) for row in data.to_dict(orient="records")])
 
 # Initialize AI-powered numerical analyzer
-print("🤖 Initializing AI-powered numerical analyzer...")
+print("Initializing AI-powered numerical analyzer...")
 try:
     numerical_analyzer = create_numerical_analyzer("data/database_data.csv")
-    print("✅ Numerical analyzer ready with AI models!")
+    print("[OK] Numerical analyzer ready with AI models!")
 except Exception as e:
-    print(f"⚠️ Numerical analyzer initialization failed: {e}")
+    print(f"[!] Numerical analyzer initialization failed: {e}")
     numerical_analyzer = None
 
 # Initialize Smart API Handler
-print("🚀 Initializing Smart API Handler...")
+print("[>] Initializing Smart API Handler...")
 try:
     smart_api = create_smart_api_handler("data/database_data.csv")
-    print("✅ Smart API Handler ready with routing capabilities!")
+    print("[OK] Smart API Handler ready with routing capabilities!")
 except Exception as e:
-    print(f"⚠️ Smart API Handler initialization failed: {e}")
+    print(f"[!] Smart API Handler initialization failed: {e}")
     smart_api = None
 
 # --- Chunk text and create embeddings
 splitter = CharacterTextSplitter(chunk_size=1500, chunk_overlap=300)
 docs = splitter.create_documents([text_data])
-embedding = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
 
-# --- Vector store
-vectordb = FAISS.from_documents(docs, embedding)
+# Use local embedding model to avoid rate limits with Google API
+# Also implement caching to avoid recreating embeddings every time
+import os
+embedding_cache_path = "chromadb/faiss_index"
+
+try:
+    if os.path.exists(embedding_cache_path) and os.path.isdir(embedding_cache_path):
+        print("[#] Loading embeddings from cache...")
+        embedding = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+        vectordb = FAISS.load_local(embedding_cache_path, embedding, allow_dangerous_deserialization=True)
+        print("[OK] Embeddings loaded from cache!")
+    else:
+        print("[#] Creating new embeddings...")
+        embedding = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+        vectordb = FAISS.from_documents(docs, embedding)
+        # Save embeddings to cache for next time
+        os.makedirs(embedding_cache_path, exist_ok=True)
+        vectordb.save_local(embedding_cache_path)
+        print("[OK] Embeddings created and cached!")
+except Exception as e:
+    print(f"[X] Error with local embeddings: {e}")
+    print("[!] Falling back to Google Generative AI embeddings (may hit rate limits)")
+    from langchain_google_genai import GoogleGenerativeAIEmbeddings
+    embedding = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+    vectordb = FAISS.from_documents(docs, embedding)
+
+# --- Retriever
 retriever = vectordb.as_retriever()
 
 # --- RAG Chain
@@ -199,6 +228,105 @@ def best_performance_analysis():
         return formatted_report
     else:
         return "Performance analysis is not available. Data or Smart API missing."
+
+# --- Revenue Calculation Functions ---
+def calculate_revenue_by_year(df, year):
+    """
+    Calculate total revenue for a specific year.
+    Only includes orders with status 'Confirmed' or 'Processed'.
+    
+    Args:
+        df (pandas.DataFrame): The data frame containing order data
+        year (int): The year for which to calculate revenue
+    
+    Returns:
+        float: Total revenue for the specified year
+    """
+    # Filter for confirmed or processed orders
+    filtered_df = df[df['status'].isin(['Confirmed', 'Processed'])]
+    
+    # Convert date column to datetime if it's not already
+    filtered_df['date'] = pd.to_datetime(filtered_df['date'])
+    
+    # Filter for the specified year
+    filtered_df = filtered_df[filtered_df['date'].dt.year == year]
+    
+    # Convert quantity and rate to numeric
+    filtered_df['quantity_num'] = pd.to_numeric(filtered_df['quantity'], errors='coerce')
+    filtered_df['rate_num'] = pd.to_numeric(filtered_df['rate'], errors='coerce')
+    
+    # Calculate revenue for each order
+    filtered_df['revenue'] = filtered_df['quantity_num'] * filtered_df['rate_num']
+    
+    # Return total revenue
+    return filtered_df['revenue'].sum()
+
+def calculate_revenue_by_month(df, year, month):
+    """
+    Calculate total revenue for a specific month and year.
+    Only includes orders with status 'Confirmed' or 'Processed'.
+    
+    Args:
+        df (pandas.DataFrame): The data frame containing order data
+        year (int): The year for which to calculate revenue
+        month (int): The month for which to calculate revenue (1-12)
+    
+    Returns:
+        float: Total revenue for the specified month and year
+    """
+    # Filter for confirmed or processed orders
+    filtered_df = df[df['status'].isin(['Confirmed', 'Processed'])]
+    
+    # Convert date column to datetime if it's not already
+    filtered_df['date'] = pd.to_datetime(filtered_df['date'])
+    
+    # Filter for the specified year and month
+    filtered_df = filtered_df[
+        (filtered_df['date'].dt.year == year) &
+        (filtered_df['date'].dt.month == month)
+    ]
+    
+    # Convert quantity and rate to numeric
+    filtered_df['quantity_num'] = pd.to_numeric(filtered_df['quantity'], errors='coerce')
+    filtered_df['rate_num'] = pd.to_numeric(filtered_df['rate'], errors='coerce')
+    
+    # Calculate revenue for each order
+    filtered_df['revenue'] = filtered_df['quantity_num'] * filtered_df['rate_num']
+    
+    # Return total revenue
+    return filtered_df['revenue'].sum()
+
+def calculate_revenue_by_order_id(df, order_id):
+    """
+    Calculate revenue for a specific order ID.
+    Only includes orders with status 'Confirmed' or 'Processed'.
+    
+    Args:
+        df (pandas.DataFrame): The data frame containing order data
+        order_id (str): The ID of the order for which to calculate revenue
+    
+    Returns:
+        float: Revenue for the specified order ID, or 0 if not found
+    """
+    # Filter for the specific order ID and confirmed or processed status
+    filtered_df = df[
+        (df['_id'] == order_id) &
+        (df['status'].isin(['Confirmed', 'Processed']))
+    ]
+    
+    if filtered_df.empty:
+        return 0.0
+    
+    # Convert quantity and rate to numeric
+    filtered_df['quantity_num'] = pd.to_numeric(filtered_df['quantity'], errors='coerce')
+    filtered_df['rate_num'] = pd.to_numeric(filtered_df['rate'], errors='coerce')
+    
+    # Calculate revenue for the order
+    filtered_df['revenue'] = filtered_df['quantity_num'] * filtered_df['rate_num']
+    
+    # Return revenue (should be just one row)
+    return filtered_df['revenue'].iloc[0] if not filtered_df.empty else 0.0
+
 # --- Performance Analysis ---
 def performance_analysis(question, analysis_type="full"):
     """
@@ -206,7 +334,7 @@ def performance_analysis(question, analysis_type="full"):
     Returns timing, token usage (if available), and result length.
     """
     start_time = time.time()
-    response = chatbot_ask(question)
+    response = chatbot_ask(question, chat_history=None)
     end_time = time.time()
     elapsed = end_time - start_time
     result_length = len(str(response))
@@ -221,7 +349,19 @@ def performance_analysis(question, analysis_type="full"):
     # Example: perf_report["llm_tokens"] = getattr(llm, "last_token_usage", None)
     return perf_report
 
-def enhanced_chatbot_ask(question, session_id="default"):
+def replace_current_month_in_question(question: str) -> str:
+    """
+    Replace 'current month' in the question with the actual month name.
+    """
+    now = datetime.now()
+    month_name = calendar.month_name[now.month]
+    # Replace all variants of 'current month' (case-insensitive)
+    return re.sub(r'current month', month_name, question, flags=re.IGNORECASE)
+
+def enhanced_chatbot_ask(question, session_id="default", chat_history=None):
+    # Always replace 'current month' with actual month name
+    question = replace_current_month_in_question(question)
+
     question_lower = question.lower()
     # --- Best Performing Feature Routing ---
     bp_features = ["agent", "weave", "quality", "composition"]
@@ -246,13 +386,37 @@ def enhanced_chatbot_ask(question, session_id="default"):
             most_orders_customer = df_valid['customerName'].value_counts().idxmax()
             order_count = df_valid['customerName'].value_counts().max()
             result = f"{most_orders_customer} has placed the most orders: {order_count}"
-            gemini_explanation = qa_chain.invoke({"query": f"Explain: {result}"})
+            # Build context with chat history if available
+            if chat_history and len(chat_history) > 0:
+                # Format chat history for context
+                history_text = "\n"
+                for msg in chat_history:
+                    role = msg.get("role", "")
+                    content = msg.get("parts", [{}])[0].get("text", "") if msg.get("parts") else ""
+                    if role and content:
+                        history_text += f"{role}: {content}\n"
+                context_prompt = f"Chat History:\n{history_text}\nExplain: {result}"
+            else:
+                context_prompt = f"Explain: {result}"
+            gemini_explanation = qa_chain.invoke({"query": context_prompt})
             return extract_rag_answer(gemini_explanation)
         if 'agent' in question_lower and ('most order' in question_lower or 'most number of order' in question_lower):
             most_orders_agent = df_valid['agentName'].value_counts().idxmax()
             order_count = df_valid['agentName'].value_counts().max()
             result = f"{most_orders_agent} has handled the most orders: {order_count}"
-            gemini_explanation = qa_chain.invoke({"query": f"Explain: {result}"})
+            # Build context with chat history if available
+            if chat_history and len(chat_history) > 0:
+                # Format chat history for context
+                history_text = "\n"
+                for msg in chat_history:
+                    role = msg.get("role", "")
+                    content = msg.get("parts", [{}])[0].get("text", "") if msg.get("parts") else ""
+                    if role and content:
+                        history_text += f"{role}: {content}\n"
+                context_prompt = f"Chat History:\n{history_text}\nExplain: {result}"
+            else:
+                context_prompt = f"Explain: {result}"
+            gemini_explanation = qa_chain.invoke({"query": context_prompt})
             return extract_rag_answer(gemini_explanation)
         if 'weave' in question_lower and ('most order' in question_lower or 'most number of order' in question_lower):
             most_orders_weave = df_valid['weave'].value_counts().idxmax()
@@ -271,15 +435,77 @@ def enhanced_chatbot_ask(question, session_id="default"):
             result_customer = df_valid.groupby('customerName')['quantity_num'].sum().idxmax()
             result_quantity = df_valid.groupby('customerName')['quantity_num'].sum().max()
             result = f"{result_customer} has ordered the highest quantity: {int(result_quantity)} units"
-            gemini_explanation = qa_chain.invoke({"query": f"Explain: {result}"})
+            # Build context with chat history if available
+            if chat_history and len(chat_history) > 0:
+                # Format chat history for context
+                history_text = "\n"
+                for msg in chat_history:
+                    role = msg.get("role", "")
+                    content = msg.get("parts", [{}])[0].get("text", "") if msg.get("parts") else ""
+                    if role and content:
+                        history_text += f"{role}: {content}\n"
+                context_prompt = f"Chat History:\n{history_text}\nExplain: {result}"
+            else:
+                context_prompt = f"Explain: {result}"
+            gemini_explanation = qa_chain.invoke({"query": context_prompt})
             return extract_rag_answer(gemini_explanation)
         if 'customer' in question_lower and ('highest revenue' in question_lower or 'most revenue' in question_lower):
             df_valid['revenue'] = pd.to_numeric(df_valid['quantity'], errors='coerce') * pd.to_numeric(df_valid['rate'], errors='coerce')
             result_customer = df_valid.groupby('customerName')['revenue'].sum().idxmax()
             result_revenue = df_valid.groupby('customerName')['revenue'].sum().max()
             result = f"{result_customer} has generated the highest revenue: ${result_revenue:,.2f}"
-            gemini_explanation = qa_chain.invoke({"query": f"Explain: {result}"})
+            # Build context with chat history if available
+            if chat_history and len(chat_history) > 0:
+                # Format chat history for context
+                history_text = "\n"
+                for msg in chat_history:
+                    role = msg.get("role", "")
+                    content = msg.get("parts", [{}])[0].get("text", "") if msg.get("parts") else ""
+                    if role and content:
+                        history_text += f"{role}: {content}\n"
+                context_prompt = f"Chat History:\n{history_text}\nExplain: {result}"
+            else:
+                context_prompt = f"Explain: {result}"
+            gemini_explanation = qa_chain.invoke({"query": context_prompt})
             return extract_rag_answer(gemini_explanation)
+        # Revenue calculation queries
+        if 'revenue' in question_lower:
+            # Check for year-specific query
+            year_match = re.search(r'\b(19|20)\d{2}\b', question)
+            if year_match:
+                year = int(year_match.group())
+                # Check if it's a month query (e.g., "revenue for january 2025")
+                month_names = ['january', 'february', 'march', 'april', 'may', 'june',
+                              'july', 'august', 'september', 'october', 'november', 'december']
+                month_name_match = re.search(r'(\b(?:' + '|'.join(month_names) + r')\b)', question_lower)
+                if month_name_match:
+                    month_name = month_name_match.group(1)
+                    month_number = month_names.index(month_name) + 1
+                    revenue = calculate_revenue_by_month(df, year, month_number)
+                    return f"Revenue for {month_name.capitalize()} {year}: ${revenue:,.2f}"
+                else:
+                    # Year-only query
+                    revenue = calculate_revenue_by_year(df, year)
+                    return f"Revenue for {year}: ${revenue:,.2f}"
+            
+            # Check for order ID query
+            # Look for order ID pattern (MongoDB ObjectId format - 24-character hex string)
+            order_id_match = re.search(r'\b([a-f0-9]{24})\b', question)
+            if order_id_match:
+                order_id = order_id_match.group(1)
+                revenue = calculate_revenue_by_order_id(df, order_id)
+                if revenue > 0:
+                    return f"Revenue for order {order_id}: ${revenue:,.2f}"
+                else:
+                    return f"No revenue found for order {order_id} (order may not exist or not be confirmed/processed)"
+            
+            # General revenue query - calculate for all confirmed/processed orders
+            filtered_df = df[df['status'].isin(['Confirmed', 'Processed'])]
+            filtered_df['quantity_num'] = pd.to_numeric(filtered_df['quantity'], errors='coerce')
+            filtered_df['rate_num'] = pd.to_numeric(filtered_df['rate'], errors='coerce')
+            filtered_df['revenue'] = filtered_df['quantity_num'] * filtered_df['rate_num']
+            total_revenue = filtered_df['revenue'].sum()
+            return f"Total revenue for all confirmed and processed orders: ${total_revenue:,.2f}"
     # Check cache for previous answer
     cached_answer = cache.get_context(question, session_id=session_id)
     if cached_answer:
@@ -287,7 +513,7 @@ def enhanced_chatbot_ask(question, session_id="default"):
     """Enhanced chatbot with Smart API routing and AI-powered analysis"""
     corrected_question = question  # Use raw question
     if smart_api:
-        print("🎯 [Smart API Routing Activated]")
+        print("[Target] [Smart API Routing Activated]")
         try:
             smart_response = smart_api.process_query(corrected_question)
             # Most sold quality by quantity
@@ -393,6 +619,16 @@ def enhanced_chatbot_ask(question, session_id="default"):
                 )
             else:
                 context_prompt = f"Question: {corrected_question}"
+            # Build context with chat history if available
+            if chat_history and len(chat_history) > 0:
+                # Format chat history for context
+                history_text = "\n"
+                for msg in chat_history:
+                    role = msg.get("role", "")
+                    content = msg.get("parts", [{}])[0].get("text", "") if msg.get("parts") else ""
+                    if role and content:
+                        history_text += f"{role}: {content}\n"
+                context_prompt = f"Chat History:\n{history_text}\n{context_prompt}"
             rag_response = qa_chain.invoke({"query": context_prompt})
             rag_answer = extract_rag_answer(rag_response)
             combined_response = f"{rag_answer}"
@@ -404,14 +640,25 @@ def enhanced_chatbot_ask(question, session_id="default"):
     else:
         return fallback_analysis(corrected_question)
 
-def fallback_analysis(question, session_id="default"):
+def fallback_analysis(question, session_id="default", chat_history=None):
     """Fallback to original enhanced analysis if Smart API fails"""
     is_numerical = detect_numerical_query(question)
     if is_numerical and numerical_analyzer:
-        print("🔢 [AI Numerical Analysis Mode Activated]")
+        print("[#] [AI Numerical Analysis Mode Activated]")
         try:
             ai_analysis = numerical_analyzer.comprehensive_analysis(question)
-            context_prompt = f"Question: {question}"
+            # Build context with chat history if available
+            if chat_history and len(chat_history) > 0:
+                # Format chat history for context
+                history_text = "\n"
+                for msg in chat_history:
+                    role = msg.get("role", "")
+                    content = msg.get("parts", [{}])[0].get("text", "") if msg.get("parts") else ""
+                    if role and content:
+                        history_text += f"{role}: {content}\n"
+                context_prompt = f"Chat History:\n{history_text}\nQuestion: {question}"
+            else:
+                context_prompt = f"Question: {question}"
             rag_response = qa_chain.invoke({"query": context_prompt})
             rag_answer = extract_rag_answer(rag_response)
             combined_response = f"{ai_analysis}\n\n{rag_answer}"
@@ -419,21 +666,32 @@ def fallback_analysis(question, session_id="default"):
             return combined_response
         except Exception as e:
             print(f"⚠️ AI analysis failed: {e}")
-            return standard_chatbot_ask(question, session_id=session_id)
+            return standard_chatbot_ask(question, session_id=session_id, chat_history=chat_history)
     else:
-        return standard_chatbot_ask(question, session_id=session_id)
+        return standard_chatbot_ask(question, session_id=session_id, chat_history=chat_history)
 
-def standard_chatbot_ask(question, session_id="default"):
+def standard_chatbot_ask(question, session_id="default", chat_history=None):
     """Standard RAG chatbot function"""
-    context_prompt = f"Question: {question}"
+    # Build context with chat history if available
+    if chat_history and len(chat_history) > 0:
+        # Format chat history for context
+        history_text = "\n"
+        for msg in chat_history:
+            role = msg.get("role", "")
+            content = msg.get("parts", [{}])[0].get("text", "") if msg.get("parts") else ""
+            if role and content:
+                history_text += f"{role}: {content}\n"
+        context_prompt = f"Chat History:\n{history_text}\nQuestion: {question}"
+    else:
+        context_prompt = f"Question: {question}"
     answer = qa_chain.invoke({"query": context_prompt})
     rag_answer = extract_rag_answer(answer)
     cache.update_context(question, rag_answer, session_id=session_id)
     return rag_answer
 
-def chatbot_ask(question, session_id="default"):
+def chatbot_ask(question, session_id="default", chat_history=None):
     """Main chatbot function with AI enhancement"""
-    return enhanced_chatbot_ask(question, session_id=session_id)
+    return enhanced_chatbot_ask(question, session_id=session_id, chat_history=chat_history)
 
 def format_customer_names(customers):
     """Convert a list of dicts with 'customerName' to plain text format."""
@@ -465,7 +723,7 @@ if __name__ == "__main__":
             if corrected_q != user_q:
                 print(f"[SpellCorrector] Corrected question: {corrected_q}")
             print(f"🤔 Processing your query... (Raw: {user_q})")
-            response = chatbot_ask(corrected_q, session_id=session_id)
+            response = chatbot_ask(corrected_q, session_id=session_id, chat_history=None)
             print("\n🤖 Bot:", response)
             print("=" *60)
         except KeyboardInterrupt:
