@@ -10,6 +10,7 @@ python-dotenv==1.0.0
 requests==2.31.0
 pymongo==4.8.0
 sentence-transformers==2.2
+deep-translator==1.9.1
 
 # Optional dependencies for development
 python-dotenv==1.0.0

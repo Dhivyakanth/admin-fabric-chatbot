@@ -12,6 +12,9 @@ from chat_history_manager import save_chat_history, load_chat_history, is_chat_h
 # Use MongoDB instead of SQLite3 for chat history
 from Mongodb import save_chat_history_mongo as save_chat_history_db, load_chat_history_mongo as load_chat_history_db, get_all_chats_mongo as get_all_chats_db, delete_chat_mongo as delete_chat_db, chat_exists_in_mongo as chat_exists_in_db
 
+# Import translation module
+from translator import translate_to_english, translate_to_user_language
+
 def strip_summary_sections(response_text):
     """
     Remove summary sections from response text.
@@ -98,6 +101,7 @@ def send_message(chat_id):
     try:
         data = request.get_json()
         user_message = data.get('message', '').strip()
+        user_language = data.get('language', 'en')  # Default to English
         
         if not user_message:
             return jsonify({
@@ -168,13 +172,35 @@ def send_message(chat_id):
                     "parts": [{"text": msg["content"]}]
                 })
         
+        # Translate user message to English if needed
+        translated_message = user_message
+        if user_language != 'en':
+            try:
+                translated_message = translate_to_english(user_message)
+                print(f"[#] Translated message: {translated_message}")
+            except Exception as e:
+                print(f"[!] Translation error: {e}")
+                # Continue with original message if translation fails
+                translated_message = user_message
+        
         # Generate AI response using rag_chatbot backend
-        print(f"[#] Processing isolated message: {user_message}")
+        print(f"[#] Processing isolated message: {translated_message}")
         print(f"[#] Isolated chat history length: {len(isolated_chat_history)}")
 
-        ai_response = chatbot_ask(user_message, session_id=chat_id, chat_history=isolated_chat_history)
+        ai_response = chatbot_ask(translated_message, session_id=chat_id, chat_history=isolated_chat_history)
         # Strip summary sections from the response
         stripped_response = strip_summary_sections(ai_response)
+        
+        # Translate response to user's language if needed
+        final_response = stripped_response
+        if user_language != 'en':
+            try:
+                final_response = translate_to_user_language(stripped_response, user_language)
+                print(f"[#] Translated response: {final_response}")
+            except Exception as e:
+                print(f"[!] Response translation error: {e}")
+                # Continue with original response if translation fails
+                final_response = stripped_response
 
         response_validation = {
             "response_length": len(stripped_response),
@@ -183,12 +209,13 @@ def send_message(chat_id):
 
         ai_msg = {
             "id": str(uuid.uuid4()),
-            "content": stripped_response,
+            "content": final_response,
             "role": "assistant",
             "timestamp": datetime.now().isoformat(),
             "validated": True,
             "source": "rag_chatbot_chatbot_ask",
-            "validation": response_validation
+            "validation": response_validation,
+            "language": user_language
         }
 
         chat_sessions[chat_id]["messages"].append(ai_msg)

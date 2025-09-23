@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useToast } from "@/hooks/use-toast";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   Send, 
   LogOut, 
@@ -103,7 +104,7 @@ const Dashboard = () => {
     setNewMessage("");
     setIsTyping(true);
     try {
-      const messageResponse = await chatbotApi.sendMessage(chatId, question);
+      const messageResponse = await chatbotApi.sendMessage(chatId, question, selectedLanguage);
       if (messageResponse.success && messageResponse.data) {
         setChats(prev => prev.map(chat => chat.id === chatId ? messageResponse.data!.chat : chat));
         // Scroll to chat area
@@ -121,6 +122,7 @@ const Dashboard = () => {
   const [chats, setChats] = useState<ApiChat[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState("");
+  const [selectedLanguage, setSelectedLanguage] = useState("en"); // en, ta, hi
   const [isTyping, setIsTyping] = useState(false);
   const [isBackendConnected, setIsBackendConnected] = useState(false);
   const [isCheckingConnection, setIsCheckingConnection] = useState(true);
@@ -278,11 +280,11 @@ const Dashboard = () => {
       const festivalMessage = generateFestivalMessage();
       setIsTyping(true);
       
-      const messageResponse = await chatbotApi.sendMessage(chatId, festivalMessage);
-      
+      const messageResponse = await chatbotApi.sendMessage(chatId, festivalMessage, selectedLanguage);
+       
       if (messageResponse.success && messageResponse.data) {
         // Update the chat with new messages
-        setChats(prev => prev.map(chat => 
+        setChats(prev => prev.map(chat =>
           chat.id === chatId ? messageResponse.data!.chat : chat
         ));
         
@@ -393,11 +395,11 @@ const Dashboard = () => {
     setIsTyping(true);
 
     try {
-      const response = await chatbotApi.sendMessage(currentChatId, messageText);
-      
+      const response = await chatbotApi.sendMessage(currentChatId, messageText, selectedLanguage);
+       
       if (response.success && response.data) {
         // Update the chat with new messages
-        setChats(prev => prev.map(chat => 
+        setChats(prev => prev.map(chat =>
           chat.id === currentChatId ? response.data!.chat : chat
         ));
         
@@ -648,10 +650,27 @@ const Dashboard = () => {
           <>
             {/* Chat Header - Hidden on mobile to save space */}
             <div className="hidden md:block p-4 border-b border-border bg-card/50">
-              <h2 className="text-lg font-semibold">{currentChat.title}</h2>
-              <p className="text-sm text-muted-foreground">
-                AI-Powered Sales Data Analytics
-              </p>
+              <div className="flex justify-between items-center">
+                <div>
+                  <h2 className="text-lg font-semibold">{currentChat.title}</h2>
+                  <p className="text-sm text-muted-foreground">
+                    AI-Powered Sales Data Analytics
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Language:</span>
+                  <Select value={selectedLanguage} onValueChange={setSelectedLanguage}>
+                    <SelectTrigger className="w-[120px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="en">English</SelectItem>
+                      <SelectItem value="ta">தமிழ்</SelectItem>
+                      <SelectItem value="hi">हिन्दी</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </div>
 
             {/* Messages */}
@@ -705,6 +724,19 @@ const Dashboard = () => {
 
             {/* Message Input */}
             <div className="p-2 md:p-4 border-t border-border bg-card/50">
+              {/* Language selector for mobile */}
+              <div className="md:hidden flex justify-end mb-2">
+                <Select value={selectedLanguage} onValueChange={setSelectedLanguage}>
+                  <SelectTrigger className="w-[100px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="en">English</SelectItem>
+                    <SelectItem value="ta">தமிழ்</SelectItem>
+                    <SelectItem value="hi">हिन्दी</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="max-w-3xl mx-auto flex gap-2">
                 <Input
                   value={newMessage}
@@ -740,12 +772,27 @@ const Dashboard = () => {
               </h2>
               <div className="h-2" />
               {isBackendConnected ? (
-                <Button
-                  onClick={createNewChat}
-                  className="bg-gradient-primary hover:opacity-90 transition-smooth shadow-soft w-full md:w-auto mt-4 text-base font-semibold px-6 py-3"
-                >
-                  Start New Analysis
-                </Button>
+                <div className="flex flex-col items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">Language:</span>
+                    <Select value={selectedLanguage} onValueChange={setSelectedLanguage}>
+                      <SelectTrigger className="w-[120px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="en">English</SelectItem>
+                        <SelectItem value="ta">தமிழ்</SelectItem>
+                        <SelectItem value="hi">हिन्दी</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    onClick={createNewChat}
+                    className="bg-gradient-primary hover:opacity-90 transition-smooth shadow-soft w-full md:w-auto mt-4 text-base font-semibold px-6 py-3"
+                  >
+                    Start New Analysis
+                  </Button>
+                </div>
               ) : (
                 <Alert className="max-w-md mx-auto mt-4">
                   <AlertCircle className="h-4 w-4" />
