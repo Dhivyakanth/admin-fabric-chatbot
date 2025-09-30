@@ -228,7 +228,7 @@ except Exception as e:
 retriever = vectordb.as_retriever()
 
 # --- RAG Chain
-llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash-exp", temperature=0)
+llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
 qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever)
 
 # --- Cache
@@ -308,7 +308,7 @@ def best_performance_analysis():
     """
     if smart_api and hasattr(smart_api, 'data'):
         df = smart_api.data.copy()
-        df_valid = df[df['status'] == 'Confirmed']
+        df_valid = df[df['status'] != 'Declined']
         df_valid['quantity_num'] = pd.to_numeric(df_valid['quantity'], errors='coerce')
         df_valid['rate_num'] = pd.to_numeric(df_valid['rate'], errors='coerce')
         df_valid['revenue'] = df_valid['quantity_num'] * df_valid['rate_num']
@@ -505,6 +505,47 @@ def enhanced_chatbot_ask(question, session_id="default", chat_history=None):
                 context_prompt = f"Explain: {result}"
             gemini_explanation = qa_chain.invoke({"query": context_prompt})
             return extract_rag_answer(gemini_explanation)
+        # Handle specific agent queries without grouping
+        if 'agent' in question_lower and ('confirmed orders' in question_lower or 'declined orders' in question_lower or 'pending orders' in question_lower):
+            # Check if a specific agent is mentioned in the question
+            agent_names = ['mukilan', 'devaraj', 'boopalan']
+            for agent in agent_names:
+                if agent in question_lower:
+                    # Filter by specific agent (case-insensitive) and status if mentioned
+                    agent_df = df[df['agentName'].str.lower() == agent.lower()]
+                    if 'confirmed orders' in question_lower:
+                        agent_df = agent_df[agent_df['status'].str.lower() == 'confirmed']
+                    elif 'declined orders' in question_lower:
+                        agent_df = agent_df[agent_df['status'].str.lower() == 'declined']
+                    elif 'pending orders' in question_lower:
+                        agent_df = agent_df[agent_df['status'].str.lower() == 'pending']
+                    
+                    order_count = len(agent_df)
+                    status_text = ''
+                    if 'confirmed orders' in question_lower:
+                        status_text = 'confirmed'
+                    elif 'declined orders' in question_lower:
+                        status_text = 'declined'
+                    elif 'pending orders' in question_lower:
+                        status_text = 'pending'
+                    else:
+                        status_text = 'total'
+                    result = f"{agent.title()} has {order_count} {status_text} orders."
+                    # Build context with chat history if available
+                    if chat_history and len(chat_history) > 0:
+                        # Format chat history for context
+                        history_text = "\n"
+                        for msg in chat_history:
+                            role = msg.get("role", "")
+                            content = msg.get("parts", [{}])[0].get("text", "") if msg.get("parts") else ""
+                            if role and content:
+                                history_text += f"{role}: {content}\n"
+                        context_prompt = f"Chat History:\n{history_text}\nExplain: {result}"
+                    else:
+                        context_prompt = f"Explain: {result}"
+                    gemini_explanation = qa_chain.invoke({"query": context_prompt})
+                    return extract_rag_answer(gemini_explanation)
+        
         if 'agent' in question_lower and ('most order' in question_lower or 'most number of order' in question_lower):
             most_orders_agent = df_valid['agentName'].value_counts().idxmax()
             order_count = df_valid['agentName'].value_counts().max()
@@ -623,47 +664,77 @@ def enhanced_chatbot_ask(question, session_id="default", chat_history=None):
             smart_response = smart_api.process_query(corrected_question)
             # Most sold quality by quantity
             if "most sold quality" in corrected_question.lower():
-                context_prompt = (
-                    f"Question: {corrected_question}\n"
-                    "Instruction: Use only the embedded tabular data below. "
-                    "For each quality type, sum the total quantity sold (exclude declined orders). "
-                    "Return a ranking of quality types by total quantity sold, from highest to lowest. "
-                    "Clearly state which quality type is the most sold by quantity, and ensure this matches the top-ranked quality in your ranking. "
-                    "If there are multiple with the same quantity, mention all. "
-                    "Only show the total quantity as a single number (do not concatenate different units or show unit breakdowns). "
-                    "Example format:\n"
-                    "🤖 Bot: After analyzing all confirmed orders, the most sold quality type is **[quality]** with a total of [quantity] units sold.\n"
-                    "Ranking:\n1. [quality1]: [quantity1]\n2. [quality2]: [quantity2]"
+                # Use pandas for correct ranking and answer
+                df_valid = smart_api.data.copy()
+                df_valid = df_valid[df_valid['status'] != 'Declined']
+                df_valid = df_valid.copy()  # Create a copy to avoid SettingWithCopyWarning
+                df_valid['quality_normalized'] = df_valid['quality'].str.lower()
+                df_valid['quantity_num'] = pd.to_numeric(df_valid['quantity'], errors='coerce')
+                quality_group = df_valid.groupby('quality_normalized')['quantity_num'].sum().sort_values(ascending=False)
+                most_sold_quality = quality_group.idxmax()
+                most_sold_quantity = quality_group.max()
+                ranking = "\n".join([f"{i+1}. {quality.title()}: {int(qty)}" for i, (quality, qty) in enumerate(quality_group.head(3).items())])
+                rag_answer = (
+                    f"After analyzing all confirmed orders, the most sold quality type is **{most_sold_quality}** with a total of {int(most_sold_quantity)} units sold.\n"
+                    f"Ranking:\n{ranking}"
                 )
+                cache.update_context(corrected_question, rag_answer)
+                return rag_answer
             # Most sold composition by quantity
             elif "most sold composition" in corrected_question.lower():
                 # Use pandas for correct ranking and answer
                 df_valid = smart_api.data.copy()
-                df_valid = df_valid[df_valid['status'] == 'Confirmed']
+                df_valid = df_valid[df_valid['status'] != 'Declined']
+                df_valid = df_valid.copy()  # Create a copy to avoid SettingWithCopyWarning
+                df_valid['composition_normalized'] = df_valid['composition'].str.lower()
                 df_valid['quantity_num'] = pd.to_numeric(df_valid['quantity'], errors='coerce')
-                composition_group = df_valid.groupby('composition')['quantity_num'].sum().sort_values(ascending=False)
+                composition_group = df_valid.groupby('composition_normalized')['quantity_num'].sum().sort_values(ascending=False)
                 most_sold_composition = composition_group.idxmax()
                 most_sold_quantity = composition_group.max()
-                ranking = "\n".join([f"{i+1}. {comp}: {int(qty)}" for i, (comp, qty) in enumerate(composition_group.items())])
+                ranking = "\n".join([f"{i+1}. {comp.title()}: {int(qty)}" for i, (comp, qty) in enumerate(composition_group.head(3).items())])
                 rag_answer = (
-                    f"🤖 Bot: After analyzing all confirmed orders, the most sold composition is **{most_sold_composition}** with a total of {int(most_sold_quantity)} units sold.\n"
+                    f"After analyzing all confirmed orders, the most sold composition is **{most_sold_composition}** with a total of {int(most_sold_quantity)} units sold.\n"
                     f"Ranking:\n{ranking}"
                 )
                 cache.update_context(corrected_question, rag_answer)
                 return rag_answer
             # Most sold weave by quantity
             elif "most sold weave" in corrected_question.lower():
+                # Use pandas for correct ranking and answer
+                df_valid = smart_api.data.copy()
+                df_valid = df_valid[df_valid['status'] != 'Declined']
+                df_valid = df_valid.copy()  # Create a copy to avoid SettingWithCopyWarning
+                df_valid['weave_normalized'] = df_valid['weave'].str.lower()
+                df_valid['quantity_num'] = pd.to_numeric(df_valid['quantity'], errors='coerce')
+                weave_group = df_valid.groupby('weave_normalized')['quantity_num'].sum().sort_values(ascending=False)
+                most_sold_weave = weave_group.idxmax()
+                most_sold_quantity = weave_group.max()
+                ranking = "\n".join([f"{i+1}. {weave.title()}: {int(qty)}" for i, (weave, qty) in enumerate(weave_group.head(3).items())])
+                rag_answer = (
+                    f"After analyzing all confirmed orders, the most sold weave type is **{most_sold_weave}** with a total of {int(most_sold_quantity)} units sold.\n"
+                    f"Ranking:\n{ranking}"
+                )
+                cache.update_context(corrected_question, rag_answer)
+                return rag_answer
+            # Handle specific agent queries without grouping
+            elif "confirmed orders" in corrected_question.lower() and any(agent in corrected_question.lower() for agent in ['mukilan', 'devaraj', 'boopalan']):
+                # Extract specific agent from question
+                agent_names = ['mukilan', 'devaraj', 'boopalan']
+                for agent in agent_names:
+                    if agent in corrected_question.lower():
+                        agent_data = smart_api.data[smart_api.data['agentName'].str.lower() == agent.lower()]
+                        confirmed_data = agent_data[agent_data['status'] == 'Confirmed']
+                        order_count = len(confirmed_data)
+                        return f"{agent.title()} has {order_count} confirmed orders."
+                # If we couldn't identify a specific agent, return general info
                 context_prompt = (
                     f"Question: {corrected_question}\n"
                     "Instruction: Use only the embedded tabular data below. "
-                    "For each weave type, sum the total quantity sold (exclude declined orders). "
-                    "Return a ranking of weave types by total quantity sold, from highest to lowest. "
-                    "Clearly state which weave type is the most sold by quantity, and ensure this matches the top-ranked weave in your ranking. "
-                    "If there are multiple with the same quantity, mention all. "
-                    "Only show the total quantity as a single number (do not concatenate different units or show unit breakdowns). "
-                    "Example format:\n"
-                    "🤖 Bot: After analyzing all confirmed orders, the most sold weave type is **[weave]** with a total of [quantity] units sold.\n"
-                    "Ranking:\n1. [weave1]: [quantity1]\n2. [weave2]: [quantity2]"
+                    "Count orders with status 'Confirmed' for the specified agent. "
+                    "Return the exact count for the specific agent mentioned in the question. "
+                    "Do not group or aggregate by other fields. "
+                    "Example output:\n"
+                    "Mukilan has 12 confirmed orders."
                 )
             # Concise agent-wise confirmation summary
             elif "agent wise order confirmation list" in corrected_question.lower():

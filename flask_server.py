@@ -434,11 +434,11 @@ def get_sales_data():
         # Use EXACT SAME functions as livedata_integration.py
         all_sales_data = fetch_sales_data_from_api()
 
-        confirmed_sales_data = filter_confirmed_orders(all_sales_data) if all_sales_data else []
-
         confirmed_sales_data = [record for record in all_sales_data if record.get('status', '').lower() == 'confirmed']
+        declined_sales_data = [record for record in all_sales_data if record.get('status', '').lower() == 'declined']
+        processed_sales_data = [record for record in all_sales_data if record.get('status', '').lower() == 'processed']
 
-        print(f"[#] Fetched sales data - Total: {len(all_sales_data) if all_sales_data else 0}, Confirmed: {len(confirmed_sales_data)}")
+        print(f"[#] Fetched sales data - Total: {len(all_sales_data) if all_sales_data else 0}, Confirmed: {len(confirmed_sales_data)}, Declined: {len(declined_sales_data)}, Processed: {len(processed_sales_data)}")
         
          # Debug: Show actual confirmed weave counts
         if confirmed_sales_data:
@@ -446,7 +446,7 @@ def get_sales_data():
              for record in confirmed_sales_data:
                  weave = record.get('weave', 'Unknown').strip()
                  weave_debug[weave] = weave_debug.get(weave, 0) + 1
-             print(f"[#] ACTUAL confirmed weave counts: {weave_debug}")        
+             print(f"[#] ACTUAL confirmed weave counts: {weave_debug}")
          # Verify data consistency
         if all_sales_data:
              print(f"[#] Sample record keys: {list(all_sales_data[0].keys()) if all_sales_data else 'No data'}")
@@ -455,11 +455,15 @@ def get_sales_data():
              "success": True,
              "data": {
                  "all_orders": all_sales_data,
-                 "confirmed_orders": confirmed_sales_data
+                 "confirmed_orders": confirmed_sales_data,
+                 "declined_orders": declined_sales_data,
+                 "processed_orders": processed_sales_data
              },
              "count": {
                  "total": len(all_sales_data) if all_sales_data else 0,
-                 "confirmed": len(confirmed_sales_data)
+                 "confirmed": len(confirmed_sales_data),
+                 "declined": len(declined_sales_data),
+                 "processed": len(processed_sales_data)
              },
              "metadata": {
                  "fetched_at": datetime.now().isoformat(),
@@ -799,9 +803,9 @@ def debug_weave_counts():
         # Fetch data using the same functions
         all_sales_data = fetch_sales_data_from_api()
 
-        confirmed_sales_data = filter_confirmed_orders(all_sales_data) if all_sales_data else []
-
         confirmed_sales_data = [record for record in all_sales_data if record.get('status', '').lower() == 'confirmed']
+        declined_sales_data = [record for record in all_sales_data if record.get('status', '').lower() == 'declined']
+        processed_sales_data = [record for record in all_sales_data if record.get('status', '').lower() == 'processed']
 
         
         # Count weaves in confirmed orders
@@ -824,6 +828,8 @@ def debug_weave_counts():
             "debug_info": {
                 "total_records": len(all_sales_data),
                 "confirmed_records": len(confirmed_sales_data),
+                "declined_records": len(declined_sales_data),
+                "processed_records": len(processed_sales_data),
                 "status_breakdown": status_counts,
                 "confirmed_weave_counts": weave_counts,
                 "timestamp": datetime.now().isoformat()
@@ -841,24 +847,18 @@ def debug_weave_counts():
 def debug_counts():
     """Debug endpoint to verify API data counts"""
     try:
-
-        from livedata_Integeration import fetch_sales_data_from_api, filter_confirmed_orders, analyze_weave_types
-
-        all_data = fetch_sales_data_from_api()
-        confirmed_data = filter_confirmed_orders(all_data) if all_data else []
-        weave_counts, total_confirmed = analyze_weave_types(all_data, 'confirmed') if all_data else ({}, 0)
-
-        # Month breakdown
-        month_counts = {}
-        for record in confirmed_data:
-
         # Only use fetch_sales_data_from_api from livedata_integration
-            from livedata_integration import fetch_sales_data_from_api
-            all_data = fetch_sales_data_from_api()
+        from livedata_integration import fetch_sales_data_from_api
+        all_data = fetch_sales_data_from_api()
+        
+        # Filter confirmed, declined, and processed orders
+        confirmed_data = [record for record in all_data if record.get('status', '').lower() == 'confirmed'] if all_data else []
+        declined_data = [record for record in all_data if record.get('status', '').lower() == 'declined'] if all_data else []
+        processed_data = [record for record in all_data if record.get('status', '').lower() == 'processed'] if all_data else []
+        
         # Month breakdown
         month_counts = {}
         for record in all_data:
-
             date_str = record.get('date', '')
             if date_str:
                 try:
@@ -875,15 +875,12 @@ def debug_counts():
             "success": True,
             "debug_data": {
                 "total_records": len(all_data),
-
                 "confirmed_records": len(confirmed_data),
-                "confirmed_weave_counts": weave_counts,
+                "declined_records": len(declined_data),
+                "processed_records": len(processed_data),
                 "confirmed_month_counts": month_counts,
                 "sample_confirmed_record": confirmed_data[0] if confirmed_data else None,
-
-                "confirmed_month_counts": month_counts,
                 "sample_record": all_data[0] if all_data else None,
-
                 "timestamp": datetime.now().isoformat()
             }
         }), 200

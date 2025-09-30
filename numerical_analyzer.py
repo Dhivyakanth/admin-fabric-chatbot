@@ -73,32 +73,58 @@ class NumericalAnalyzer:
             stats = []
             question_lower = question.lower()
             
+            # Check for agent-specific queries
+            if 'agent' in question_lower and any(agent in question_lower for agent in ['mukilan', 'devaraj', 'boopalan']):
+                for agent in ['mukilan', 'devaraj', 'boopalan']:
+                    if agent in question_lower:
+                        agent_data = self.data[self.data['agentName'].str.lower() == agent.lower()]
+                        # Check for specific status in the question
+                        if 'confirmed orders' in question_lower:
+                            agent_data = agent_data[agent_data['status'] == 'Confirmed']
+                        elif 'declined orders' in question_lower:
+                            agent_data = agent_data[agent_data['status'] == 'Declined']
+                        elif 'pending orders' in question_lower:
+                            agent_data = agent_data[agent_data['status'] == 'Pending']
+                        
+                        record_count = len(agent_data)
+                        status_text = ''
+                        if 'confirmed orders' in question_lower:
+                            status_text = 'confirmed'
+                        elif 'declined orders' in question_lower:
+                            status_text = 'declined'
+                        elif 'pending orders' in question_lower:
+                            status_text = 'pending'
+                        else:
+                            status_text = 'total'
+                        stats.append(f"{agent.title()} has {record_count} {status_text} orders")
+                        break
+            
             # Check for common statistical keywords
-            if any(word in question_lower for word in ['total', 'sum']):
+            elif any(word in question_lower for word in ['total', 'sum']):
                 numeric_cols = self.data.select_dtypes(include=[np.number]).columns
                 for col in numeric_cols:
                     total = self.data[col].sum()
                     stats.append(f"Total {col}: {total:,.2f}")
             
-            if any(word in question_lower for word in ['average', 'mean']):
+            elif any(word in question_lower for word in ['average', 'mean']):
                 numeric_cols = self.data.select_dtypes(include=[np.number]).columns
                 for col in numeric_cols:
                     mean_val = self.data[col].mean()
                     stats.append(f"Average {col}: {mean_val:.2f}")
             
-            if any(word in question_lower for word in ['count', 'how many']):
+            elif any(word in question_lower for word in ['count', 'how many']):
                 stats.append(f"Total records: {len(self.data)}")
                 for col in self.data.columns:
                     unique_count = self.data[col].nunique()
                     stats.append(f"Unique {col} values: {unique_count}")
             
-            if any(word in question_lower for word in ['maximum', 'highest']):
+            elif any(word in question_lower for word in ['maximum', 'highest']):
                 numeric_cols = self.data.select_dtypes(include=[np.number]).columns
                 for col in numeric_cols:
                     max_val = self.data[col].max()
                     stats.append(f"Maximum {col}: {max_val:,.2f}")
             
-            if any(word in question_lower for word in ['minimum', 'lowest']):
+            elif any(word in question_lower for word in ['minimum', 'lowest']):
                 numeric_cols = self.data.select_dtypes(include=[np.number]).columns
                 for col in numeric_cols:
                     min_val = self.data[col].min()

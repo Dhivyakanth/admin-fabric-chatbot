@@ -171,8 +171,8 @@ A: No records found for XYZ in the dataset.
         return None
     
     def filter_data_by_agent(self, agent_name):
-        """Filter data for specific agent"""
-        return self.data[self.data['agentName'] == agent_name].copy()
+        """Filter data for specific agent with case-insensitive matching"""
+        return self.data[self.data['agentName'].str.lower() == agent_name.lower()].copy()
     
     def get_weave_data(self):
         """Get data focused on weave information"""
@@ -338,7 +338,7 @@ A: No records found for XYZ in the dataset.
             elif 'most sold' in question_lower or ('highest' in question_lower and ('weave' in question_lower or 'quality' in question_lower or 'composition' in question_lower)) or 'best selling' in question_lower:
                 return self._handle_most_sold_query(question_lower, valid_data, date_filter_text)
             elif 'least sold' in question_lower or ('lowest' in question_lower and ('weave' in question_lower or 'quality' in question_lower or 'composition' in question_lower)):
-                return self._handle_least_sold_query(question_lower, valid_data)
+                return self._handle_least_sold_query(question_lower, valid_data, date_filter_text)
             elif 'compare' in question_lower:
                 return self._handle_comparison_query(question_lower, valid_data)
             else:
@@ -347,42 +347,48 @@ A: No records found for XYZ in the dataset.
         except Exception as e:
             return f"Analysis failed: {str(e)}"
     
-    #def _handle_most_sold_query(self, question_lower, valid_data, date_filter_text=""):
+    def _handle_most_sold_query(self, question_lower, valid_data, date_filter_text=""):
         """Handle queries about most sold items"""
         if 'weave' in question_lower:
-            # Group by weave and sum quantities
-            weave_sales = valid_data.groupby('weave')['quantity_clean'].sum().sort_values(ascending=False)
+            # Group by weave (case-insensitive) and sum quantities
+            valid_data_case_normalized = valid_data.copy()
+            valid_data_case_normalized['weave_normalized'] = valid_data_case_normalized['weave'].str.lower()
+            weave_sales = valid_data_case_normalized.groupby('weave_normalized')['quantity_clean'].sum().sort_values(ascending=False)
             top_weave = weave_sales.index[0]
             top_quantity = weave_sales.iloc[0]
             
             # Brief ranking
-            ranking = "\n".join([f"{i}. {weave}: {qty:,.0f}" for i, (weave, qty) in enumerate(weave_sales.head(3).items(), 1)])
+            ranking = "\n".join([f"{i}. {weave.title()}: {qty:,.0f}" for i, (weave, qty) in enumerate(weave_sales.head(3).items(), 1)])
             
             date_text = f" {date_filter_text}" if date_filter_text else ""
-            #response = f"Most sold weave{date_text}: **{top_weave}** ({top_quantity:,.0f} units)\n\nRanking:\n{ranking}\n\n*Calculation excludes declined orders*"
-            #return strip_summary_sections(response)
+            response = f"Most sold weave{date_text}: **{top_weave}** ({top_quantity:,.0f} units)\n\nRanking:\n{ranking}\n\n*Calculation excludes declined orders*"
+            return strip_summary_sections(response)
             
         elif 'quality' in question_lower:
-            # Group by quality and sum quantities
-            quality_sales = valid_data.groupby('quality')['quantity_clean'].sum().sort_values(ascending=False)
+            # Group by quality (case-insensitive) and sum quantities
+            valid_data_case_normalized = valid_data.copy()
+            valid_data_case_normalized['quality_normalized'] = valid_data_case_normalized['quality'].str.lower()
+            quality_sales = valid_data_case_normalized.groupby('quality_normalized')['quantity_clean'].sum().sort_values(ascending=False)
             top_quality = quality_sales.index[0]
             top_quantity = quality_sales.iloc[0]
             
             # Brief ranking
-            ranking = "\n".join([f"{i}. {quality}: {qty:,.0f}" for i, (quality, qty) in enumerate(quality_sales.head(3).items(), 1)])
+            ranking = "\n".join([f"{i}. {quality.title()}: {qty:,.0f}" for i, (quality, qty) in enumerate(quality_sales.head(3).items(), 1)])
             
             date_text = f" {date_filter_text}" if date_filter_text else ""
             response = f"Most sold quality{date_text}: **{top_quality}** ({top_quantity:,.0f} units)\n\nRanking:\n{ranking}\n\n*Calculation excludes declined orders*"
             return strip_summary_sections(response)
             
         elif 'composition' in question_lower:
-            # Group by composition and sum quantities
-            comp_sales = valid_data.groupby('composition')['quantity_clean'].sum().sort_values(ascending=False)
+            # Group by composition (case-insensitive) and sum quantities
+            valid_data_case_normalized = valid_data.copy()
+            valid_data_case_normalized['composition_normalized'] = valid_data_case_normalized['composition'].str.lower()
+            comp_sales = valid_data_case_normalized.groupby('composition_normalized')['quantity_clean'].sum().sort_values(ascending=False)
             top_comp = comp_sales.index[0]
             top_quantity = comp_sales.iloc[0]
             
             # Brief ranking
-            ranking = "\n".join([f"{i}. {comp}: {qty:,.0f}" for i, (comp, qty) in enumerate(comp_sales.head(3).items(), 1)])
+            ranking = "\n".join([f"{i}. {comp.title()}: {qty:,.0f}" for i, (comp, qty) in enumerate(comp_sales.head(3).items(), 1)])
             
             date_text = f" {date_filter_text}" if date_filter_text else ""
             response = f"Most sold composition{date_text}: **{top_comp}** ({top_quantity:,.0f} units)\n\nRanking:\n{ranking}\n\n*Calculation excludes declined orders*"
@@ -390,30 +396,40 @@ A: No records found for XYZ in the dataset.
         
         return "Please specify: weave, quality, or composition type"
     
-    #def _handle_least_sold_query(self, question_lower, valid_data):
+    def _handle_least_sold_query(self, question_lower, valid_data, date_filter_text=""):
         """Handle queries about least sold items"""
-        response = "📉 LEAST SOLD ANALYSIS (Declined orders excluded):\n\n"
+        date_text = f" {date_filter_text}" if date_filter_text else ""
+        response = f"📉 LEAST SOLD ANALYSIS{date_text} (Declined orders excluded):\n\n"
         
         if 'weave' in question_lower:
-            weave_sales = valid_data.groupby('weave')['quantity_clean'].sum().sort_values(ascending=True)
+            # Group by weave (case-insensitive) and sum quantities
+            valid_data_case_normalized = valid_data.copy()
+            valid_data_case_normalized['weave_normalized'] = valid_data_case_normalized['weave'].str.lower()
+            weave_sales = valid_data_case_normalized.groupby('weave_normalized')['quantity_clean'].sum().sort_values(ascending=True)
             response += "🧵 WEAVE TYPE SALES (Lowest first):\n"
             for i, (weave, qty) in enumerate(weave_sales.head(5).items(), 1):
-                response += f"{i}. {weave}: {qty:,.0f} units\n"
-            response += f"\n📉 LEAST SOLD WEAVE: {weave_sales.index[0]} with {weave_sales.iloc[0]:,.0f} units"
+                response += f"{i}. {weave.title()}: {qty:,.0f} units\n"
+            response += f"\n📉 LEAST SOLD WEAVE: {weave_sales.index[0].title()} with {weave_sales.iloc[0]:,.0f} units"
             
         elif 'quality' in question_lower:
-            quality_sales = valid_data.groupby('quality')['quantity_clean'].sum().sort_values(ascending=True)
+            # Group by quality (case-insensitive) and sum quantities
+            valid_data_case_normalized = valid_data.copy()
+            valid_data_case_normalized['quality_normalized'] = valid_data_case_normalized['quality'].str.lower()
+            quality_sales = valid_data_case_normalized.groupby('quality_normalized')['quantity_clean'].sum().sort_values(ascending=True)
             response += "⭐ QUALITY TYPE SALES (Lowest first):\n"
             for i, (quality, qty) in enumerate(quality_sales.head(5).items(), 1):
-                response += f"{i}. {quality}: {qty:,.0f} units\n"
-            response += f"\n📉 LEAST SOLD QUALITY: {quality_sales.index[0]} with {quality_sales.iloc[0]:,.0f} units"
+                response += f"{i}. {quality.title()}: {qty:,.0f} units\n"
+            response += f"\n📉 LEAST SOLD QUALITY: {quality_sales.index[0].title()} with {quality_sales.iloc[0]:,.0f} units"
             
         elif 'composition' in question_lower:
-            comp_sales = valid_data.groupby('composition')['quantity_clean'].sum().sort_values(ascending=True)
+            # Group by composition (case-insensitive) and sum quantities
+            valid_data_case_normalized = valid_data.copy()
+            valid_data_case_normalized['composition_normalized'] = valid_data_case_normalized['composition'].str.lower()
+            comp_sales = valid_data_case_normalized.groupby('composition_normalized')['quantity_clean'].sum().sort_values(ascending=True)
             response += "🧪 COMPOSITION TYPE SALES (Lowest first):\n"
             for i, (comp, qty) in enumerate(comp_sales.head(5).items(), 1):
-                response += f"{i}. {comp}: {qty:,.0f} units\n"
-            response += f"\n📉 LEAST SOLD COMPOSITION: {comp_sales.index[0]} with {comp_sales.iloc[0]:,.0f} units"
+                response += f"{i}. {comp.title()}: {qty:,.0f} units\n"
+            response += f"\n📉 LEAST SOLD COMPOSITION: {comp_sales.index[0].title()} with {comp_sales.iloc[0]:,.0f} units"
         
         return response
     
@@ -442,7 +458,10 @@ A: No records found for XYZ in the dataset.
         else:
             for category in ['weave', 'quality', 'composition']:
                 if category in question_lower:
-                    cat_stats = valid_data.groupby(category).agg({
+                    valid_data_case_normalized = valid_data.copy()
+                    normalized_col = f'{category}_normalized'
+                    valid_data_case_normalized[normalized_col] = valid_data_case_normalized[category].str.lower()
+                    cat_stats = valid_data_case_normalized.groupby(normalized_col).agg({
                         'quantity_clean': 'sum',
                         'rate_clean': 'mean',
                         '_id': 'count'
@@ -450,7 +469,7 @@ A: No records found for XYZ in the dataset.
                     
                     response += f"📈 {category.upper()} COMPARISON:\n"
                     for item in cat_stats.index:
-                        response += f"• {item}: {cat_stats.loc[item, '_id']} orders, "
+                        response += f"• {item.title()}: {cat_stats.loc[item, '_id']} orders, "
                         response += f"{cat_stats.loc[item, 'quantity_clean']:,.0f} units\n"
                     break
         
@@ -714,32 +733,41 @@ Analysis excludes {agent_stats['declined_orders']} declined orders"""
     def _handle_agent_most_sold(self, question_lower, valid_agent_data, agent_name):
         """Handle agent-specific most sold queries"""
         if 'weave' in question_lower:
-            weave_sales = valid_agent_data.groupby('weave')['quantity_clean'].sum().sort_values(ascending=False)
+            # Group by weave (case-insensitive) and sum quantities
+            valid_agent_data_case_normalized = valid_agent_data.copy()
+            valid_agent_data_case_normalized['weave_normalized'] = valid_agent_data_case_normalized['weave'].str.lower()
+            weave_sales = valid_agent_data_case_normalized.groupby('weave_normalized')['quantity_clean'].sum().sort_values(ascending=False)
             if len(weave_sales) > 0:
                 top_weave = weave_sales.index[0]
                 top_quantity = weave_sales.iloc[0]
-                ranking = "\n".join([f"{i}. {weave}: {qty:,.0f}" for i, (weave, qty) in enumerate(weave_sales.head(3).items(), 1)])
-                return f"{agent_name}'s most sold weave: **{top_weave}** ({top_quantity:,.0f} units)\n\nRanking:\n{ranking}"
+                ranking = "\n".join([f"{i}. {weave.title()}: {qty:,.0f}" for i, (weave, qty) in enumerate(weave_sales.head(3).items(), 1)])
+                return f"{agent_name}'s most sold weave: **{top_weave.title()}** ({top_quantity:,.0f} units)\n\nRanking:\n{ranking}"
             else:
                 return f"{agent_name} has no valid weave sales data"
                 
         elif 'quality' in question_lower:
-            quality_sales = valid_agent_data.groupby('quality')['quantity_clean'].sum().sort_values(ascending=False)
+            # Group by quality (case-insensitive) and sum quantities
+            valid_agent_data_case_normalized = valid_agent_data.copy()
+            valid_agent_data_case_normalized['quality_normalized'] = valid_agent_data_case_normalized['quality'].str.lower()
+            quality_sales = valid_agent_data_case_normalized.groupby('quality_normalized')['quantity_clean'].sum().sort_values(ascending=False)
             if len(quality_sales) > 0:
                 top_quality = quality_sales.index[0]
                 top_quantity = quality_sales.iloc[0]
-                ranking = "\n".join([f"{i}. {quality}: {qty:,.0f}" for i, (quality, qty) in enumerate(quality_sales.head(3).items(), 1)])
-                return f"{agent_name}'s most sold quality: **{top_quality}** ({top_quantity:,.0f} units)\n\nRanking:\n{ranking}"
+                ranking = "\n".join([f"{i}. {quality.title()}: {qty:,.0f}" for i, (quality, qty) in enumerate(quality_sales.head(3).items(), 1)])
+                return f"{agent_name}'s most sold quality: **{top_quality.title()}** ({top_quantity:,.0f} units)\n\nRanking:\n{ranking}"
             else:
                 return f"{agent_name} has no valid quality sales data"
                 
         elif 'composition' in question_lower:
-            comp_sales = valid_agent_data.groupby('composition')['quantity_clean'].sum().sort_values(ascending=False)
+            # Group by composition (case-insensitive) and sum quantities
+            valid_agent_data_case_normalized = valid_agent_data.copy()
+            valid_agent_data_case_normalized['composition_normalized'] = valid_agent_data_case_normalized['composition'].str.lower()
+            comp_sales = valid_agent_data_case_normalized.groupby('composition_normalized')['quantity_clean'].sum().sort_values(ascending=False)
             if len(comp_sales) > 0:
                 top_comp = comp_sales.index[0]
                 top_quantity = comp_sales.iloc[0]
-                ranking = "\n".join([f"{i}. {comp}: {qty:,.0f}" for i, (comp, qty) in enumerate(comp_sales.head(3).items(), 1)])
-                return f"{agent_name}'s most sold composition: **{top_comp}** ({top_quantity:,.0f} units)\n\nRanking:\n{ranking}"
+                ranking = "\n".join([f"{i}. {comp.title()}: {qty:,.0f}" for i, (comp, qty) in enumerate(comp_sales.head(3).items(), 1)])
+                return f"{agent_name}'s most sold composition: **{top_comp.title()}** ({top_quantity:,.0f} units)\n\nRanking:\n{ranking}"
             else:
                 return f"{agent_name} has no valid composition sales data"
         
@@ -750,28 +778,37 @@ Analysis excludes {agent_stats['declined_orders']} declined orders"""
         response = f"📉 {agent_name.upper()} - LEAST SOLD ANALYSIS:\n\n"
         
         if 'weave' in question_lower:
-            weave_sales = valid_agent_data.groupby('weave')['quantity_clean'].sum().sort_values(ascending=True)
+            # Group by weave (case-insensitive) and sum quantities
+            valid_agent_data_case_normalized = valid_agent_data.copy()
+            valid_agent_data_case_normalized['weave_normalized'] = valid_agent_data_case_normalized['weave'].str.lower()
+            weave_sales = valid_agent_data_case_normalized.groupby('weave_normalized')['quantity_clean'].sum().sort_values(ascending=True)
             response += "🧵 WEAVE TYPE SALES BY THIS AGENT (Lowest first):\n"
             for i, (weave, qty) in enumerate(weave_sales.items(), 1):
-                response += f"{i}. {weave}: {qty:,.0f} units\n"
+                response += f"{i}. {weave.title()}: {qty:,.0f} units\n"
             if len(weave_sales) > 0:
-                response += f"\n📉 {agent_name}'s LEAST SOLD WEAVE: {weave_sales.index[0]} with {weave_sales.iloc[0]:,.0f} units"
+                response += f"\n📉 {agent_name}'s LEAST SOLD WEAVE: {weave_sales.index[0].title()} with {weave_sales.iloc[0]:,.0f} units"
                 
         elif 'quality' in question_lower:
-            quality_sales = valid_agent_data.groupby('quality')['quantity_clean'].sum().sort_values(ascending=True)
+            # Group by quality (case-insensitive) and sum quantities
+            valid_agent_data_case_normalized = valid_agent_data.copy()
+            valid_agent_data_case_normalized['quality_normalized'] = valid_agent_data_case_normalized['quality'].str.lower()
+            quality_sales = valid_agent_data_case_normalized.groupby('quality_normalized')['quantity_clean'].sum().sort_values(ascending=True)
             response += "⭐ QUALITY TYPE SALES BY THIS AGENT (Lowest first):\n"
             for i, (quality, qty) in enumerate(quality_sales.items(), 1):
-                response += f"{i}. {quality}: {qty:,.0f} units\n"
+                response += f"{i}. {quality.title()}: {qty:,.0f} units\n"
             if len(quality_sales) > 0:
-                response += f"\n📉 {agent_name}'s LEAST SOLD QUALITY: {quality_sales.index[0]} with {quality_sales.iloc[0]:,.0f} units"
+                response += f"\n📉 {agent_name}'s LEAST SOLD QUALITY: {quality_sales.index[0].title()} with {quality_sales.iloc[0]:,.0f} units"
                 
         elif 'composition' in question_lower:
-            comp_sales = valid_agent_data.groupby('composition')['quantity_clean'].sum().sort_values(ascending=True)
+            # Group by composition (case-insensitive) and sum quantities
+            valid_agent_data_case_normalized = valid_agent_data.copy()
+            valid_agent_data_case_normalized['composition_normalized'] = valid_agent_data_case_normalized['composition'].str.lower()
+            comp_sales = valid_agent_data_case_normalized.groupby('composition_normalized')['quantity_clean'].sum().sort_values(ascending=True)
             response += "🧪 COMPOSITION TYPE SALES BY THIS AGENT (Lowest first):\n"
             for i, (comp, qty) in enumerate(comp_sales.items(), 1):
-                response += f"{i}. {comp}: {qty:,.0f} units\n"
+                response += f"{i}. {comp.title()}: {qty:,.0f} units\n"
             if len(comp_sales) > 0:
-                response += f"\n📉 {agent_name}'s LEAST SOLD COMPOSITION: {comp_sales.index[0]} with {comp_sales.iloc[0]:,.0f} units"
+                response += f"\n📉 {agent_name}'s LEAST SOLD COMPOSITION: {comp_sales.index[0].title()} with {comp_sales.iloc[0]:,.0f} units"
         
         return response
     
@@ -815,6 +852,73 @@ Details: {total_orders} orders, ${total_revenue:,.2f} revenue
 Average per order: {total_quantity / total_orders:,.0f} units"""
     
     def process_query(self, question, previous_context=""):
+        # Check for specific agent queries with status filtering
+        question_lower = question.lower()
+        
+        # Check for specific agent queries with status filtering (for confirmed/declined/pending orders)
+        agent_status_keywords = ['confirmed orders', 'declined orders', 'pending orders']
+        for status_keyword in agent_status_keywords:
+            if status_keyword in question_lower and any(agent_name.lower() in question_lower for agent_name in ['mukilan', 'devaraj', 'boopalan']):
+                # Extract agent name from the question
+                agent_name = None
+                for agent in ['mukilan', 'devaraj', 'boopalan']:
+                    if agent in question_lower:
+                        agent_name = agent.title()
+                        break
+                
+                if agent_name:
+                    # Get status from the keyword
+                    status = status_keyword.split()[0].title()  # 'Confirmed', 'Declined', or 'Pending'
+                    # Filter data by agent (case-insensitive) and status
+                    agent_data = self.data[self.data['agentName'].str.lower() == agent_name.lower()].copy()
+                    filtered_orders = agent_data[agent_data['status'].str.lower() == status.lower()].copy()
+                    
+                    # Return specific count without grouping
+                    count = len(filtered_orders)
+                    return f"{agent_name} has {count} {status.lower()} orders."
+        
+        # Check for other agent-specific queries
+        agent_context = self.detect_agent_context(question, previous_context)
+        if agent_context:
+            # Filter data by agent
+            working_data = self.filter_data_by_agent(agent_context)
+            
+            # Check if it's asking for specific status orders
+            if 'confirmed orders' in question_lower:
+                working_data = working_data[working_data['status'] == 'Confirmed']
+            elif 'declined orders' in question_lower:
+                working_data = working_data[working_data['status'] == 'Declined']
+            elif 'pending orders' in question_lower:
+                working_data = working_data[working_data['status'] == 'Pending']
+            
+            # Process based on query type
+            query_type = self.detect_query_type(question)
+            if query_type == "math":
+                return self.call_math_api_with_agent_context(question, working_data, agent_context)
+            elif query_type == "weave":
+                weave_data = working_data[['date', 'weave', 'quantity', 'status', '_id', 'rate', 'agentName', 'customerName']].copy()
+                if any(word in question_lower for word in ['total', 'sum', 'average', 'count', 'how many', 'most sold', 'highest', 'best selling', 'least sold', 'lowest']):
+                    return self.call_math_api_with_agent_context(question, weave_data, agent_context)
+                else:
+                    weave_summary = f"{agent_context}'s weave data: {len(weave_data)} records\nTypes: {', '.join(weave_data['weave'].unique())}"
+                    return weave_summary
+            elif query_type == "quality":
+                quality_data = working_data[['date', 'quality', 'quantity', 'status', '_id', 'rate', 'agentName', 'customerName']].copy()
+                if any(word in question_lower for word in ['total', 'sum', 'average', 'count', 'how many', 'most sold', 'highest', 'best selling', 'least sold', 'lowest']):
+                    return self.call_math_api_with_agent_context(question, quality_data, agent_context)
+                else:
+                    quality_summary = f"{agent_context}'s quality data: {len(quality_data)} records\nTypes: {', '.join(quality_data['quality'].unique())}"
+                    return quality_summary
+            elif query_type == "composition":
+                composition_data = working_data[['date', 'composition', 'quantity', 'status', '_id', 'rate', 'agentName', 'customerName']].copy()
+                if any(word in question_lower for word in ['total', 'sum', 'average', 'count', 'how many', 'most sold', 'highest', 'best selling', 'least sold', 'lowest']):
+                    return self.call_math_api_with_agent_context(question, composition_data, agent_context)
+                else:
+                    comp_summary = f"{agent_context}'s composition data: {len(composition_data)} records\nTypes: {', '.join(composition_data['composition'].unique())}"
+                    return comp_summary
+            else:
+                return f"{agent_context} data: {len(working_data)} records found"
+        
         # Dynamically extract keywords from the dataset
         dynamic_keywords = self.get_dynamic_keywords()
         # Tokenize question and check for keywords
@@ -834,33 +938,26 @@ Average per order: {total_quantity / total_orders:,.0f} units"""
             else:
                 # If ambiguous, reply with clarification
                 return "Please specify: agent, weave, quality, or composition for best performing query."
-    # New: Check context first
+        # New: Check context first
         context = self.get_question_context(question)
-    # You can use 'context' to route or enhance answers
-    # Example: print or log context for debugging
-    # print(f"[DEBUG] Question context: {context}")
+        # You can use 'context' to route or enhance answers
+        # Example: print or log context for debugging
+        # print(f"[DEBUG] Question context: {context}")
         """Main method to process any query and route to appropriate API"""
         query_type = self.detect_query_type(question)
-        agent_context = self.detect_agent_context(question, previous_context)
         
         # Filter data by agent if context is detected
-        working_data = self.filter_data_by_agent(agent_context) if agent_context else self.data
+        working_data = self.data  # Start with all data
         
         if query_type == "math":
-            if agent_context:
-                return self.call_math_api_with_agent_context(question, working_data, agent_context)
-            else:
-                return self.call_math_api(question, working_data)
+            return self.call_math_api(question, working_data)
         
         elif query_type == "weave":
             weave_data = working_data[['date', 'weave', 'quantity', 'status', '_id', 'rate', 'agentName', 'customerName']].copy()
             
             # Check if it's also a mathematical query about weave
-            if any(word in question.lower() for word in ['total', 'sum', 'average', 'count', 'how many', 'most sold', 'highest', 'best selling', 'least sold', 'lowest']):
-                if agent_context:
-                    return self.call_math_api_with_agent_context(question, weave_data, agent_context)
-                else:
-                    return self.call_math_api(question, weave_data)
+            if any(word in question_lower for word in ['total', 'sum', 'average', 'count', 'how many', 'most sold', 'highest', 'best selling', 'least sold', 'lowest']):
+                return self.call_math_api(question, weave_data)
             else:
                 weave_summary = f"Weave data: {len(weave_data)} records\nTypes: {', '.join(weave_data['weave'].unique())}"
                 return weave_summary
@@ -869,11 +966,8 @@ Average per order: {total_quantity / total_orders:,.0f} units"""
             quality_data = working_data[['date', 'quality', 'quantity', 'status', '_id', 'rate', 'agentName', 'customerName']].copy()
             
             # Check if it's also a mathematical query about quality
-            if any(word in question.lower() for word in ['total', 'sum', 'average', 'count', 'how many', 'most sold', 'highest', 'best selling', 'least sold', 'lowest']):
-                if agent_context:
-                    return self.call_math_api_with_agent_context(question, quality_data, agent_context)
-                else:
-                    return self.call_math_api(question, quality_data)
+            if any(word in question_lower for word in ['total', 'sum', 'average', 'count', 'how many', 'most sold', 'highest', 'best selling', 'least sold', 'lowest']):
+                return self.call_math_api(question, quality_data)
             else:
                 quality_summary = f"Quality data: {len(quality_data)} records\nTypes: {', '.join(quality_data['quality'].unique())}"
                 return quality_summary
@@ -882,11 +976,8 @@ Average per order: {total_quantity / total_orders:,.0f} units"""
             composition_data = working_data[['date', 'composition', 'quantity', 'status', '_id', 'rate', 'agentName', 'customerName']].copy()
             
             # Check if it's also a mathematical query about composition
-            if any(word in question.lower() for word in ['total', 'sum', 'average', 'count', 'how many', 'most sold', 'highest', 'best selling', 'least sold', 'lowest']):
-                if agent_context:
-                    return self.call_math_api_with_agent_context(question, composition_data, agent_context)
-                else:
-                    return self.call_math_api(question, composition_data)
+            if any(word in question_lower for word in ['total', 'sum', 'average', 'count', 'how many', 'most sold', 'highest', 'best selling', 'least sold', 'lowest']):
+                return self.call_math_api(question, composition_data)
             else:
                 comp_summary = f"Composition data: {len(composition_data)} records\nTypes: {', '.join(composition_data['composition'].unique())}"
                 return comp_summary
@@ -896,10 +987,7 @@ Average per order: {total_quantity / total_orders:,.0f} units"""
             return self._handle_customer_query(question, working_data)
         
         else:
-            if agent_context:
-                return f"{agent_context} data: {len(working_data)} records found"
-            else:
-                return f"General data: {len(working_data)} total records"
+            return f"General data: {len(working_data)} total records"
 
     def _handle_customer_query(self, question, data):
         """Handle customer-specific queries with proper analysis"""

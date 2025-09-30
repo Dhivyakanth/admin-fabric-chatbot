@@ -438,7 +438,7 @@ def get_festival_window_data(festival_name, sales_data):
             try:
                 # Check status first - only confirmed orders
                 status = record.get('status', '').lower()
-                if status != 'confirmed':
+                if status == 'declined':
                     continue
                 
                 # Parse date
