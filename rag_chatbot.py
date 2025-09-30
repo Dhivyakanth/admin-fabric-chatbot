@@ -219,10 +219,10 @@ try:
         print("[OK] Embeddings created and cached!")
 except Exception as e:
     print(f"[X] Error with local embeddings: {e}")
-    print("[!] Falling back to Google Generative AI embeddings (may hit rate limits)")
-    from langchain_google_genai import GoogleGenerativeAIEmbeddings
-    embedding = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
-    vectordb = FAISS.from_documents(docs, embedding)
+    print("[X] Critical Error: Could not initialize local embeddings. Please ensure sentence_transformers is installed: pip install sentence-transformers")
+    print("[X] The application will now exit to prevent using Google API embeddings which may hit rate limits")
+    exit(1)
+
 
 # --- Retriever
 retriever = vectordb.as_retriever()
@@ -467,6 +467,7 @@ def enhanced_chatbot_ask(question, session_id="default", chat_history=None):
     # Always replace 'current month' with actual month name
     question = replace_current_month_in_question(question)
 
+
     question_lower = question.lower()
     # --- Best Performing Feature Routing ---
     bp_features = ["agent", "weave", "quality", "composition"]
@@ -616,6 +617,74 @@ def enhanced_chatbot_ask(question, session_id="default", chat_history=None):
             return extract_rag_answer(gemini_explanation)
         # Revenue calculation queries
         if 'revenue' in question_lower:
+            # Check for customer-specific revenue query
+            customer_match = re.search(r'for customer ([\w\s]+?)(?:\s|$)|for ([\w\s]+?) customer|([A-Za-z\s]+?)(?:\'s|s\') revenue|revenue for ([A-Za-z\s]+?)$', question_lower)
+            if customer_match:
+                # Extract customer name from the match groups
+                customer_name = next((g for g in customer_match.groups() if g and g not in ["'s", "s'"]), None)
+                if customer_name:
+                    customer_name = customer_name.strip()
+                    # Find the best matching customer name from the dataset (case-insensitive)
+                    possible_customers = df['customerName'].dropna().unique()
+                    matched_customer = None
+                    for cust in possible_customers:
+                        if cust.lower() == customer_name.lower():
+                            matched_customer = cust
+                            break
+                        elif customer_name.lower() in cust.lower() or cust.lower() in customer_name.lower():
+                            matched_customer = cust
+                            break
+                    if matched_customer:
+                        # Filter for specific customer
+                        customer_df = df[df['customerName'].str.lower() == matched_customer.lower()]
+                        customer_df = customer_df[customer_df['status'].isin(['Confirmed', 'Processed'])]
+                        customer_df['quantity_num'] = pd.to_numeric(customer_df['quantity'], errors='coerce')
+                        customer_df['rate_num'] = pd.to_numeric(customer_df['rate'], errors='coerce')
+                        customer_df['revenue'] = customer_df['quantity_num'] * customer_df['rate_num']
+                        customer_revenue = customer_df['revenue'].sum()
+                        return f"Revenue for customer {matched_customer}: ${customer_revenue:,.2f}"
+            
+            # Check for agent-specific revenue query
+            agent_match = re.search(r'for agent ([\w\s]+?)(?:\s|$)|for ([\w\s]+?) agent|([A-Za-z\s]+?)(?:\'s|s\') revenue|revenue for ([A-Za-z\s]+?)$', question_lower)
+            if agent_match:
+                # Extract agent name from the match groups
+                agent_name = next((g for g in agent_match.groups() if g and g not in ["'s", "s'"]), None)
+                if agent_name:
+                    agent_name = agent_name.strip()
+                    # Find the best matching agent name from the dataset (case-insensitive)
+                    possible_agents = df['agentName'].dropna().unique()
+                    matched_agent = None
+                    for ag in possible_agents:
+                        if ag.lower() == agent_name.lower():
+                            matched_agent = ag
+                            break
+                        elif agent_name.lower() in ag.lower() or ag.lower() in agent_name.lower():
+                            matched_agent = ag
+                            break
+                    if matched_agent:
+                        # Filter for specific agent
+                        agent_df = df[df['agentName'].str.lower() == matched_agent.lower()]
+                        agent_df = agent_df[agent_df['status'].isin(['Confirmed', 'Processed'])]
+                        agent_df['quantity_num'] = pd.to_numeric(agent_df['quantity'], errors='coerce')
+                        agent_df['rate_num'] = pd.to_numeric(agent_df['rate'], errors='coerce')
+                        agent_df['revenue'] = agent_df['quantity_num'] * agent_df['rate_num']
+                        agent_revenue = agent_df['revenue'].sum()
+                        return f"Revenue for agent {matched_agent}: ${agent_revenue:,.2f}"
+            
+            # Check for date-specific revenue query
+            date_match = re.search(r'on (\d{4}-\d{2}-\d{2})|for date (\d{4}-\d{2}-\d{2})|revenue on (\d{4}-\d{2}-\d{2})|revenue for (\d{4}-\d{2}-\d{2})', question_lower)
+            if date_match:
+                # Extract date from the match groups
+                date_str = next((g for g in date_match.groups() if g), None)
+                if date_str:
+                    # Filter for specific date
+                    date_df = df[pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d') == date_str]
+                    date_df = date_df[date_df['status'].isin(['Confirmed', 'Processed'])]
+                    date_df['quantity_num'] = pd.to_numeric(date_df['quantity'], errors='coerce')
+                    date_df['rate_num'] = pd.to_numeric(date_df['rate'], errors='coerce')
+                    date_df['revenue'] = date_df['quantity_num'] * date_df['rate_num']
+                    date_revenue = date_df['revenue'].sum()
+                    return f"Revenue for date {date_str}: ${date_revenue:,.2f}"
             # Check for year-specific query
             year_match = re.search(r'\b(19|20)\d{2}\b', question)
             if year_match:
@@ -661,6 +730,77 @@ def enhanced_chatbot_ask(question, session_id="default", chat_history=None):
     if smart_api:
         print("[Target] [Smart API Routing Activated]")
         try:
+            # Check if this is a revenue query for specific customer, agent, or date before using Smart API
+            question_lower = corrected_question.lower()
+            if 'revenue' in question_lower:
+                # Check for customer-specific revenue query
+                customer_match = re.search(r'for customer ([\w\s]+?)(?:\s|$)|for ([\w\s]+?) customer|([A-Za-z\s]+?)(?:\'s|s\') revenue|revenue for ([A-Za-z\s]+?)$', question_lower)
+                if customer_match:
+                    # Extract customer name from the match groups
+                    customer_name = next((g for g in customer_match.groups() if g and g not in ["'s", "s'"]), None)
+                    if customer_name:
+                        customer_name = customer_name.strip()
+                        # Find the best matching customer name from the dataset (case-insensitive)
+                        possible_customers = smart_api.data['customerName'].dropna().unique()
+                        matched_customer = None
+                        for cust in possible_customers:
+                            if cust.lower() == customer_name.lower():
+                                matched_customer = cust
+                                break
+                            elif customer_name.lower() in cust.lower() or cust.lower() in customer_name.lower():
+                                matched_customer = cust
+                                break
+                        if matched_customer:
+                            # Filter for specific customer
+                            customer_df = smart_api.data[smart_api.data['customerName'].str.lower() == matched_customer.lower()]
+                            customer_df = customer_df[customer_df['status'].isin(['Confirmed', 'Processed'])]
+                            customer_df['quantity_num'] = pd.to_numeric(customer_df['quantity'], errors='coerce')
+                            customer_df['rate_num'] = pd.to_numeric(customer_df['rate'], errors='coerce')
+                            customer_df['revenue'] = customer_df['quantity_num'] * customer_df['rate_num']
+                            customer_revenue = customer_df['revenue'].sum()
+                            return f"Revenue for customer {matched_customer}: ${customer_revenue:,.2f}"
+                
+                # Check for agent-specific revenue query
+                agent_match = re.search(r'for agent ([\w\s]+?)(?:\s|$)|for ([\w\s]+?) agent|([A-Za-z\s]+?)(?:\'s|s\') revenue|revenue for ([A-Za-z\s]+?)$', question_lower)
+                if agent_match:
+                    # Extract agent name from the match groups
+                    agent_name = next((g for g in agent_match.groups() if g and g not in ["'s", "s'"]), None)
+                    if agent_name:
+                        agent_name = agent_name.strip()
+                        # Find the best matching agent name from the dataset (case-insensitive)
+                        possible_agents = smart_api.data['agentName'].dropna().unique()
+                        matched_agent = None
+                        for ag in possible_agents:
+                            if ag.lower() == agent_name.lower():
+                                matched_agent = ag
+                                break
+                            elif agent_name.lower() in ag.lower() or ag.lower() in agent_name.lower():
+                                matched_agent = ag
+                                break
+                        if matched_agent:
+                            # Filter for specific agent
+                            agent_df = smart_api.data[smart_api.data['agentName'].str.lower() == matched_agent.lower()]
+                            agent_df = agent_df[agent_df['status'].isin(['Confirmed', 'Processed'])]
+                            agent_df['quantity_num'] = pd.to_numeric(agent_df['quantity'], errors='coerce')
+                            agent_df['rate_num'] = pd.to_numeric(agent_df['rate'], errors='coerce')
+                            agent_df['revenue'] = agent_df['quantity_num'] * agent_df['rate_num']
+                            agent_revenue = agent_df['revenue'].sum()
+                            return f"Revenue for agent {matched_agent}: ${agent_revenue:,.2f}"
+                
+                # Check for date-specific revenue query
+                date_match = re.search(r'on (\d{4}-\d{2}-\d{2})|for date (\d{4}-\d{2}-\d{2})|revenue on (\d{4}-\d{2}-\d{2})|revenue for (\d{4}-\d{2}-\d{2})', question_lower)
+                if date_match:
+                    # Extract date from the match groups
+                    date_str = next((g for g in date_match.groups() if g), None)
+                    if date_str:
+                        # Filter for specific date
+                        date_df = smart_api.data[pd.to_datetime(smart_api.data['date']).dt.strftime('%Y-%m-%d') == date_str]
+                        date_df = date_df[date_df['status'].isin(['Confirmed', 'Processed'])]
+                        date_df['quantity_num'] = pd.to_numeric(date_df['quantity'], errors='coerce')
+                        date_df['rate_num'] = pd.to_numeric(date_df['rate'], errors='coerce')
+                        date_df['revenue'] = date_df['quantity_num'] * date_df['rate_num']
+                        date_revenue = date_df['revenue'].sum()
+                        return f"Revenue for date {date_str}: ${date_revenue:,.2f}"
             smart_response = smart_api.process_query(corrected_question)
             # Most sold quality by quantity
             if "most sold quality" in corrected_question.lower():
@@ -875,7 +1015,7 @@ def format_customer_names(customers):
 
 # --- CLI Loop
 if __name__ == "__main__":
-    print("🤠 Enhanced RAG Chatbot with SMART API ROUTING!")
+    print("Enhanced RAG Chatbot with SMART API ROUTING!")
     corrector = SpellCorrector()
     session_id = "default"
     while True:
