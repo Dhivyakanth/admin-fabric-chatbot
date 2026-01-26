@@ -1,4 +1,3 @@
-from spellchecker import SpellChecker
 from textblob import TextBlob
 from difflib import get_close_matches
 import pandas as pd

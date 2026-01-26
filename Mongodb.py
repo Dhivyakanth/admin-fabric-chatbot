@@ -2,21 +2,39 @@ from pymongo import MongoClient
 from datetime import datetime
 import uuid
 from typing import List, Dict, Optional
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # MongoDB connection
-uri = "mongodb+srv://hertzworkz:HertzworkZ@cluster0.7xrqojt.mongodb.net/KKP?retryWrites=true&w=majority&appName=Cluster0"
-client = MongoClient(uri)
-db = client["chatbot_db"]  # Use a proper database name
+uri = os.getenv("MONGODB_URI", "mongodb+srv://username:password@cluster0.xxxxx.mongodb.net/chatbot_db?retryWrites=true&w=majority")
 
-# Collections
-chats_collection = db["chats"]
-messages_collection = db["messages"]
+try:
+    client = MongoClient(uri, serverSelectionTimeoutMS=5000)
+    # Verify connection
+    client.admin.command('ping')
+    db = client["chatbot_db"]  # Use a proper database name
+except Exception as e:
+    print(f"[ERROR] MongoDB connection failed: {e}")
+    print("[INFO] Please configure MONGODB_URI in .env file")
+    db = None
 
-# Create indexes for better performance
-chats_collection.create_index("last_updated")
-messages_collection.create_index("chat_id")
-
-print("[OK] Connected to MongoDB:", db.name)
+# Collections - Initialize only if db is connected
+if db is not None:
+    chats_collection = db["chats"]
+    messages_collection = db["messages"]
+    
+    # Create indexes for better performance
+    chats_collection.create_index("last_updated")
+    messages_collection.create_index("chat_id")
+    
+    print("[OK] Connected to MongoDB:", db.name)
+else:
+    print("[WARNING] MongoDB is not connected. Using fallback mode.")
+    chats_collection = None
+    messages_collection = None
 
 def initialize_mongodb():
     """Initialize MongoDB collections and indexes"""
