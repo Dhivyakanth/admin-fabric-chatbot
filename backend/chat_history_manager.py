@@ -3,8 +3,9 @@ import csv
 import uuid
 from datetime import datetime
 from typing import List, Dict, Optional
+from paths import CHAT_HISTORY_DIR as CHAT_HISTORY_PATH
 
-CHAT_HISTORY_DIR = "chat_history"
+CHAT_HISTORY_DIR = str(CHAT_HISTORY_PATH)
 MAX_CHAT_HISTORY = 10
 
 def initialize_chat_history_dir():

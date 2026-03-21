@@ -3,6 +3,7 @@ import os
 import re
 from datetime import datetime
 from dotenv import load_dotenv
+from paths import DATA_CSV_PATH, ENV_FILE_PATH
 
 def strip_summary_sections(response_text):
     """
@@ -39,7 +40,7 @@ def strip_summary_sections(response_text):
     result = re.sub(r'\n\s*\n', '\n\n', result)
     return result.strip()
 
-load_dotenv()
+load_dotenv(ENV_FILE_PATH)
 
 class SmartAPIHandler:
     def get_dynamic_keywords(self):
@@ -97,7 +98,7 @@ Q: WHO IS XYZ?
 A: No records found for XYZ in the dataset.
 """
         return prompt
-    def __init__(self, csv_path="data/database_data.csv"):
+    def __init__(self, csv_path=str(DATA_CSV_PATH)):
         self.csv_path = csv_path
         self.data = pd.read_csv(csv_path)
     
@@ -1202,7 +1203,7 @@ Average per order: {total_quantity / total_orders:,.0f} units"""
 
 # Individual API Classes for specific purposes
 class WeaveAPI:
-    def __init__(self, csv_path="data/database_data.csv"):
+    def __init__(self, csv_path=str(DATA_CSV_PATH)):
         self.data = pd.read_csv(csv_path)
     
     def get_weave_data(self):
@@ -1221,7 +1222,7 @@ class WeaveAPI:
         }
 
 class QualityAPI:
-    def __init__(self, csv_path="data/database_data.csv"):
+    def __init__(self, csv_path=str(DATA_CSV_PATH)):
         self.data = pd.read_csv(csv_path)
     
     def get_quality_data(self):
@@ -1240,7 +1241,7 @@ class QualityAPI:
         }
 
 class CompositionAPI:
-    def __init__(self, csv_path="data/database_data.csv"):
+    def __init__(self, csv_path=str(DATA_CSV_PATH)):
         self.data = pd.read_csv(csv_path)
     
     def get_composition_data(self):
@@ -1259,6 +1260,6 @@ class CompositionAPI:
         }
 
 # Factory function to create the smart API handler
-def create_smart_api_handler(csv_path="data/database_data.csv"):
+def create_smart_api_handler(csv_path=str(DATA_CSV_PATH)):
     """Factory function to create a smart API handler"""
     return SmartAPIHandler(csv_path)

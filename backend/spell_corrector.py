@@ -2,9 +2,10 @@ from textblob import TextBlob
 from difflib import get_close_matches
 import pandas as pd
 from rapidfuzz import process, fuzz
+from paths import DATA_CSV_PATH
 
 # Load dataset
-df = pd.read_csv("data/database_data.csv")
+df = pd.read_csv(DATA_CSV_PATH)
 
 # Extract all unique keywords (lowercased, stripped)
 keywords = set()
@@ -30,7 +31,7 @@ class SpellCorrector:
         self.threshold = threshold
         self.keywords = set()
         # Load dataset and build domain vocabulary
-        df = pd.read_csv('data/database_data.csv')
+        df = pd.read_csv(DATA_CSV_PATH)
         for col in df.columns:
             self.keywords.add(col.strip().lower())
             for val in df[col].dropna():

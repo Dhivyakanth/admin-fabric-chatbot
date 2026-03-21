@@ -2,8 +2,9 @@ import pandas as pd
 import numpy as np
 import os
 from dotenv import load_dotenv
+from paths import ENV_FILE_PATH
 
-load_dotenv()
+load_dotenv(ENV_FILE_PATH)
 
 class NumericalAnalyzer:
     def __init__(self, csv_path):

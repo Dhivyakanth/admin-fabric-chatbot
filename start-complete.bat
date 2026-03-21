@@ -24,13 +24,13 @@ if not exist .env (
 )
 
 echo 🚀 Starting backend server in a new window...
-start cmd /k "cd /d %~dp0 && start-backend.bat"
+start cmd /k "cd /d %~dp0 && scripts\start-backend.bat"
 
 echo ⏱️  Waiting 5 seconds for backend to start...
 timeout /t 5 /nobreak >nul
 
 echo 🌐 Starting frontend in a new window...
-start cmd /k "cd /d %~dp0 && start-frontend.bat"
+start cmd /k "cd /d %~dp0 && scripts\start-frontend.bat"
 
 echo.
 echo ✅ Setup complete!

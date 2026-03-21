@@ -1,9 +1,10 @@
 import requests
 import pandas as pd
 import os
+from paths import DATA_CSV_PATH
 
 API_URL = "http://54.234.201.60:5000/chat/getFormDataForAi"
-CSV_PATH = "data/database_data.csv"
+CSV_PATH = str(DATA_CSV_PATH)
 
 
 

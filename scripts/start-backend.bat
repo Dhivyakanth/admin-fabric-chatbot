@@ -1,4 +1,7 @@
 @echo off
+set ROOT_DIR=%~dp0..
+pushd "%ROOT_DIR%"
+
 echo ========================================
 echo   Chic Chat Admin - Sales Analytics
 echo ========================================
@@ -15,9 +18,10 @@ echo ✅ Python found
 
 echo.
 echo [2/4] Installing Python dependencies...
-pip install -r requirements.txt
+pip install -r backend\requirements.txt
 if errorlevel 1 (
     echo ❌ Failed to install Python dependencies
+    popd
     pause
     exit /b 1
 )
@@ -30,6 +34,7 @@ if not exist .env (
     copy .env.example .env
     echo 📝 Please edit .env file and add your GEMINI_API_KEY
     echo 🔑 Get your free API key from: https://makersuite.google.com/app/apikey
+    popd
     pause
 )
 echo ✅ Environment configuration ready
@@ -43,4 +48,6 @@ echo ℹ️  The frontend will run on http://localhost:5173
 echo ℹ️  Press Ctrl+C to stop the server
 echo.
 
-python flask_server.py
+python backend\flask_server.py
+
+popd

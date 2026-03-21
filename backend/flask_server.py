@@ -14,6 +14,7 @@ from Mongodb import save_chat_history_mongo as save_chat_history_db, load_chat_h
 
 # Import translation module
 from translator import translate_to_english, translate_to_user_language
+from paths import CHAT_HISTORY_DIR, EMAIL_INDEX_PATH
 
 def strip_summary_sections(response_text):
     """
@@ -381,7 +382,7 @@ def delete_chat(chat_id):
         
         # Delete the CSV file if it exists (backward compatibility)
         import os
-        csv_file = os.path.join("chat_history", f"chat_{chat_id}.csv")
+        csv_file = os.path.join(str(CHAT_HISTORY_DIR), f"chat_{chat_id}.csv")
         if os.path.exists(csv_file):
             os.remove(csv_file)
         
@@ -411,9 +412,10 @@ def clear_all_chats():
         # Clear all CSV files (backward compatibility)
         import os
         import shutil
-        if os.path.exists("chat_history"):
-            shutil.rmtree("chat_history")
-            os.makedirs("chat_history")
+        chat_history_dir = str(CHAT_HISTORY_DIR)
+        if os.path.exists(chat_history_dir):
+            shutil.rmtree(chat_history_dir)
+            os.makedirs(chat_history_dir)
         
         return jsonify({
             "success": True,
@@ -898,7 +900,7 @@ def send_mail():
     """Open the email HTML file in the default web browser"""
     try:
         import os, webbrowser
-        email_file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'email', 'index.html'))
+        email_file_path = str(EMAIL_INDEX_PATH)
         if not os.path.exists(email_file_path):
             return jsonify({
                 "success": False,

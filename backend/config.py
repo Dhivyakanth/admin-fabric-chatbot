@@ -1,8 +1,9 @@
 import os
 from dotenv import load_dotenv
+from paths import ENV_FILE_PATH
 
 # Load environment variables from .env file
-load_dotenv()
+load_dotenv(ENV_FILE_PATH)
 
 class Config:
     """Configuration class for the Dress Sales Monitoring Chatbot"""
@@ -16,7 +17,7 @@ class Config:
     # Flask Configuration
     FLASK_HOST = "127.0.0.1"
     FLASK_PORT = 8000
-    FLASK_DEBUG = True
+    FLASK_DEBUG = False
     
     # CORS Configuration
     CORS_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8080", "http://127.0.0.1:8080"]

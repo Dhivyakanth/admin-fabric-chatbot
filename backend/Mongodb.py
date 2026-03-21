@@ -4,9 +4,10 @@ import uuid
 from typing import List, Dict, Optional
 import os
 from dotenv import load_dotenv
+from paths import ENV_FILE_PATH
 
 # Load environment variables
-load_dotenv()
+load_dotenv(ENV_FILE_PATH)
 
 # MongoDB connection
 uri = os.getenv("MONGODB_URI", "mongodb+srv://username:password@cluster0.xxxxx.mongodb.net/chatbot_db?retryWrites=true&w=majority")

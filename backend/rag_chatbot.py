@@ -1,3 +1,9 @@
+import os
+
+# Keep startup lightweight: avoid optional TensorFlow import path via transformers.
+os.environ.setdefault("TRANSFORMERS_NO_TF", "1")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
 import time
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -6,7 +12,6 @@ from langchain.text_splitter import CharacterTextSplitter
 from langchain.chains import RetrievalQA
 from dotenv import load_dotenv
 import pandas as pd
-import os
 import re
 import hashlib
 import json
@@ -17,7 +22,8 @@ from smart_api_handler import create_smart_api_handler
 from spell_corrector import SpellCorrector
 import calendar
 from datetime import datetime
-load_dotenv()
+from paths import DATA_CSV_PATH, FAISS_INDEX_DIR, ENV_FILE_PATH
+load_dotenv(ENV_FILE_PATH)
 def get_data_hash(csv_path):
     """
     Generate a hash of the CSV data to detect changes.
@@ -133,7 +139,7 @@ def detect_numerical_query(question):
 
 
 update_csv()
-data = pd.read_csv("data/database_data.csv")
+data = pd.read_csv(DATA_CSV_PATH)
 
 
 text_data = "\n".join([str(row) for row in data.to_dict(orient="records")])
@@ -141,7 +147,7 @@ text_data = "\n".join([str(row) for row in data.to_dict(orient="records")])
 # Initialize AI-powered numerical analyzer
 print("Initializing AI-powered numerical analyzer...")
 try:
-    numerical_analyzer = create_numerical_analyzer("data/database_data.csv")
+    numerical_analyzer = create_numerical_analyzer(str(DATA_CSV_PATH))
     print("[OK] Numerical analyzer ready with AI models!")
 except Exception as e:
     print(f"[!] Numerical analyzer initialization failed: {e}")
@@ -150,7 +156,7 @@ except Exception as e:
 # Initialize Smart API Handler
 print("[>] Initializing Smart API Handler...")
 try:
-    smart_api = create_smart_api_handler("data/database_data.csv")
+    smart_api = create_smart_api_handler(str(DATA_CSV_PATH))
     print("[OK] Smart API Handler ready with routing capabilities!")
 except Exception as e:
     print(f"[!] Smart API Handler initialization failed: {e}")
@@ -163,11 +169,11 @@ docs = splitter.create_documents([text_data])
 # Use local embedding model to avoid rate limits with Google API
 # Also implement caching to avoid recreating embeddings every time
 import os
-embedding_cache_path = "chromadb/faiss_index"
+embedding_cache_path = str(FAISS_INDEX_DIR)
 
 try:
     # Generate hash of current data
-    current_data_hash = get_data_hash("data/database_data.csv")
+    current_data_hash = get_data_hash(str(DATA_CSV_PATH))
     print(f"[#] Current data hash: {current_data_hash}")
     
     # Check if we have cached embeddings and metadata

@@ -1,4 +1,7 @@
 @echo off
+set ROOT_DIR=%~dp0..
+pushd "%ROOT_DIR%"
+
 echo ========================================
 echo   Chic Chat Admin - Frontend
 echo ========================================
@@ -15,9 +18,10 @@ echo ✅ Node.js found
 
 echo.
 echo [2/3] Installing frontend dependencies...
-npm install
+npm --prefix frontend install
 if errorlevel 1 (
     echo ❌ Failed to install frontend dependencies
+    popd
     pause
     exit /b 1
 )
@@ -32,4 +36,6 @@ echo ℹ️  Make sure the backend is running on: http://127.0.0.1:8000
 echo ℹ️  Press Ctrl+C to stop the server
 echo.
 
-npm run dev
+npm --prefix frontend run dev
+
+popd
