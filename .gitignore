@@ -22,6 +22,10 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+# Keep frontend source library files tracked (root-level lib/ ignore above is too broad)
+!frontend/src/lib/
+!frontend/src/lib/**
+
 # Virtual Environment
 venv/
 env/

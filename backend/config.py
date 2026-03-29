@@ -12,15 +12,19 @@ class Config:
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
     
     # Sales Data API Configuration
-    SALES_API_URL = "http://54.234.201.60:5000/chat/getFormData"
+    SALES_API_URL = os.getenv("SALES_API_URL", "http://54.234.201.60:5000/chat/getFormData")
     
     # Flask Configuration
-    FLASK_HOST = "127.0.0.1"
-    FLASK_PORT = 8000
-    FLASK_DEBUG = False
+    FLASK_HOST = os.getenv("FLASK_HOST", "0.0.0.0")
+    FLASK_PORT = int(os.getenv("FLASK_PORT", "8000"))
+    FLASK_DEBUG = os.getenv("FLASK_DEBUG", "false").lower() == "true"
     
     # CORS Configuration
-    CORS_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8080", "http://127.0.0.1:8080"]
+    _cors_origins_raw = os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080",
+    )
+    CORS_ORIGINS = [origin.strip() for origin in _cors_origins_raw.split(",") if origin.strip()]
     
     @classmethod
     def validate_api_key(cls):
