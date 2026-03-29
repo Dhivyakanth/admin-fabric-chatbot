@@ -17,8 +17,8 @@ pandas
 numpy
 rapidfuzz
 textblob
-googletrans==4.0rc1
 spellchecker
+gunicorn==23.0.0
 
 # Optional dependencies for development
 python-dotenv==1.0.0
