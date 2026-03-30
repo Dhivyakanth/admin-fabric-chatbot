@@ -69,6 +69,11 @@ def health_check():
             "message": str(e)
         }), 500
 
+@app.route('/health', methods=['GET'])
+def health_check_short():
+    """Backward compatible health check endpoint (no /api prefix)."""
+    return health_check()
+
 @app.route('/api/chat/new', methods=['POST'])
 def create_new_chat():
     """Create a new chat session"""
