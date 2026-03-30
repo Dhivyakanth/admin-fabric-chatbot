@@ -3,7 +3,6 @@ from flask_cors import CORS
 import json
 import uuid
 from datetime import datetime
-from rag_chatbot import chatbot_ask
 from livedata_integration import fetch_sales_data_from_api, generate_response
 from config import Config
 import traceback
@@ -189,6 +188,9 @@ def send_message(chat_id):
                 # Continue with original message if translation fails
                 translated_message = user_message
         
+        # Import chatbot lazily so server startup (/api/health) stays fast on Render
+        from rag_chatbot import chatbot_ask
+
         # Generate AI response using rag_chatbot backend
         print(f"[#] Processing isolated message: {translated_message}")
         print(f"[#] Isolated chat history length: {len(isolated_chat_history)}")

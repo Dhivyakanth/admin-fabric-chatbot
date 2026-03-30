@@ -16,7 +16,8 @@ class Config:
     
     # Flask Configuration
     FLASK_HOST = os.getenv("FLASK_HOST", "0.0.0.0")
-    FLASK_PORT = int(os.getenv("FLASK_PORT", "8000"))
+    # Render (and most PaaS) provide the port to bind as `PORT`
+    FLASK_PORT = int(os.getenv("PORT", os.getenv("FLASK_PORT", "8000")))
     FLASK_DEBUG = os.getenv("FLASK_DEBUG", "false").lower() == "true"
     
     # CORS Configuration
