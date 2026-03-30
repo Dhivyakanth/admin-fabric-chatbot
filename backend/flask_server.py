@@ -52,6 +52,17 @@ CORS(app, origins=Config.CORS_ORIGINS, supports_credentials=True)
 # In-memory storage for chat sessions (in production, use a database)
 chat_sessions = {}
 
+@app.route('/', methods=['GET'])
+def root():
+    """Basic root endpoint for Render/browser checks."""
+    return jsonify({
+        "success": True,
+        "message": "Backend is running",
+        "endpoints": {
+            "health": "/api/health"
+        }
+    }), 200
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
