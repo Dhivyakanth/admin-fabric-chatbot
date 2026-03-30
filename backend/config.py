@@ -25,7 +25,12 @@ class Config:
         "CORS_ORIGINS",
         "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080",
     )
-    CORS_ORIGINS = [origin.strip() for origin in _cors_origins_raw.split(",") if origin.strip()]
+    # Normalize to avoid subtle CORS mismatches (e.g. trailing slash).
+    CORS_ORIGINS = [
+        origin.strip().rstrip("/")
+        for origin in _cors_origins_raw.split(",")
+        if origin.strip()
+    ]
     
     @classmethod
     def validate_api_key(cls):
