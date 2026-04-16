@@ -15,6 +15,7 @@ export type Message = {
 };
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
+const CHAT_REQUEST_TIMEOUT_MS = Number(import.meta.env.VITE_CHAT_REQUEST_TIMEOUT_MS || 90000);
 
 export const chatbotApi = {
   async getAllChats() {
@@ -40,17 +41,33 @@ export const chatbotApi = {
     return result;
   },
   async sendMessage(chatId: string, message: string, language: string = 'en') {
-      const res = await fetch(`${API_BASE_URL}/chat/${chatId}/message`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, language }),
-      });
-      const result = await res.json();
-      // Ensure compatibility with frontend expectations
-      if (result.success && result.chat) {
-        return { success: true, data: { chat: result.chat } };
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), CHAT_REQUEST_TIMEOUT_MS);
+      try {
+        const res = await fetch(`${API_BASE_URL}/chat/${chatId}/message`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message, language }),
+          signal: controller.signal,
+        });
+        const result = await res.json();
+        // Ensure compatibility with frontend expectations
+        if (result.success && result.chat) {
+          return { success: true, data: { chat: result.chat } };
+        }
+        return result;
+      } catch (error: unknown) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return {
+            success: false,
+            error: 'Request timed out. Please try a shorter question or retry in a moment.',
+            timeout: true,
+          };
+        }
+        throw error;
+      } finally {
+        clearTimeout(timeoutId);
       }
-      return result;
   },
   async deleteChat(chatId: string) {
     const res = await fetch(`${API_BASE_URL}/chat/${chatId}`, { method: 'DELETE' });

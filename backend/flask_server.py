@@ -3,10 +3,13 @@ from flask_cors import CORS
 import json
 import uuid
 from datetime import datetime
+from rag_chatbot import chatbot_ask
 from livedata_integration import fetch_sales_data_from_api, generate_response
 from config import Config
 import traceback
 import re
+import os
+import time
 from chat_history_manager import save_chat_history, load_chat_history, is_chat_history_full, delete_oldest_chat, get_all_chat_files
 # Use MongoDB instead of SQLite3 for chat history
 from Mongodb import save_chat_history_mongo as save_chat_history_db, load_chat_history_mongo as load_chat_history_db, get_all_chats_mongo as get_all_chats_db, delete_chat_mongo as delete_chat_db, chat_exists_in_mongo as chat_exists_in_db
@@ -14,6 +17,26 @@ from Mongodb import save_chat_history_mongo as save_chat_history_db, load_chat_h
 # Import translation module
 from translator import translate_to_english, translate_to_user_language
 from paths import CHAT_HISTORY_DIR, EMAIL_INDEX_PATH
+
+CHAT_CONTEXT_WINDOW = int(os.getenv("CHAT_CONTEXT_WINDOW", "5"))
+MAX_CONTEXT_CHARS = int(os.getenv("MAX_CONTEXT_CHARS", "1200"))
+
+
+def log_stage(stage, request_start, **extra):
+    elapsed_ms = round((time.perf_counter() - request_start) * 1000, 2)
+    payload = {"event": "chat_stage", "stage": stage, "elapsed_ms": elapsed_ms}
+    if extra:
+        payload.update(extra)
+    print(json.dumps(payload, default=str))
+
+
+def trim_for_context(content):
+    if not isinstance(content, str):
+        return ""
+    cleaned = content.strip()
+    if len(cleaned) <= MAX_CONTEXT_CHARS:
+        return cleaned
+    return cleaned[:MAX_CONTEXT_CHARS] + "..."
 
 def strip_summary_sections(response_text):
     """
@@ -52,17 +75,6 @@ CORS(app, origins=Config.CORS_ORIGINS, supports_credentials=True)
 # In-memory storage for chat sessions (in production, use a database)
 chat_sessions = {}
 
-@app.route('/', methods=['GET'])
-def root():
-    """Basic root endpoint for Render/browser checks."""
-    return jsonify({
-        "success": True,
-        "message": "Backend is running",
-        "endpoints": {
-            "health": "/api/health"
-        }
-    }), 200
-
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
@@ -78,11 +90,6 @@ def health_check():
             "status": "error",
             "message": str(e)
         }), 500
-
-@app.route('/health', methods=['GET'])
-def health_check_short():
-    """Backward compatible health check endpoint (no /api prefix)."""
-    return health_check()
 
 @app.route('/api/chat/new', methods=['POST'])
 def create_new_chat():
@@ -115,6 +122,8 @@ def create_new_chat():
 def send_message(chat_id):
     """Send a message to a specific chat"""
     try:
+        request_start = time.perf_counter()
+        log_stage("request_start", request_start, chat_id=chat_id)
         data = request.get_json()
         user_message = data.get('message', '').strip()
         user_language = data.get('language', 'en')  # Default to English
@@ -158,6 +167,7 @@ def send_message(chat_id):
                         "success": False,
                         "error": "Chat session not found"
                     }), 404
+        log_stage("load_chat", request_start, chat_exists=chat_id in chat_sessions)
         
         # Add user message to chat history
         user_msg = {
@@ -173,19 +183,19 @@ def send_message(chat_id):
         isolated_chat_history = []
         current_session_messages = chat_sessions[chat_id]["messages"]
         
-        # Only include the last few relevant messages to avoid context mixing
-        relevant_messages = current_session_messages[-10:] if len(current_session_messages) > 10 else current_session_messages
+        # Keep context intentionally short to reduce token load and latency.
+        relevant_messages = current_session_messages[-CHAT_CONTEXT_WINDOW:] if len(current_session_messages) > CHAT_CONTEXT_WINDOW else current_session_messages
         
         for msg in relevant_messages:
             if msg["role"] == "user":
                 isolated_chat_history.append({
                     "role": "user",
-                    "parts": [{"text": msg["content"]}]
+                    "parts": [{"text": trim_for_context(msg["content"])}]
                 })
             elif msg["role"] == "assistant":
                 isolated_chat_history.append({
                     "role": "model",
-                    "parts": [{"text": msg["content"]}]
+                    "parts": [{"text": trim_for_context(msg["content"])}]
                 })
         
         # Translate user message to English if needed
@@ -198,15 +208,14 @@ def send_message(chat_id):
                 print(f"[!] Translation error: {e}")
                 # Continue with original message if translation fails
                 translated_message = user_message
+            log_stage("translate_in", request_start, language=user_language)
         
-        # Import chatbot lazily so server startup (/api/health) stays fast on Render
-        from rag_chatbot import chatbot_ask
-
         # Generate AI response using rag_chatbot backend
         print(f"[#] Processing isolated message: {translated_message}")
         print(f"[#] Isolated chat history length: {len(isolated_chat_history)}")
 
-        ai_response = chatbot_ask(translated_message, session_id=chat_id, chat_history=isolated_chat_history)
+        ai_response = chatbot_ask(trim_for_context(translated_message), session_id=chat_id, chat_history=isolated_chat_history)
+        log_stage("rag_pipeline", request_start)
         # Strip summary sections from the response
         stripped_response = strip_summary_sections(ai_response)
         
@@ -220,6 +229,7 @@ def send_message(chat_id):
                 print(f"[!] Response translation error: {e}")
                 # Continue with original response if translation fails
                 final_response = stripped_response
+            log_stage("translate_out", request_start, language=user_language)
 
         response_validation = {
             "response_length": len(stripped_response),
@@ -246,6 +256,8 @@ def send_message(chat_id):
         
         # Save chat history to database
         save_chat_history_db(chat_id, chat_sessions[chat_id]["messages"], chat_sessions[chat_id]["title"])
+        log_stage("db_save", request_start, message_count=len(chat_sessions[chat_id]["messages"]))
+        log_stage("total_response", request_start, success=True)
 
         return jsonify({
             "success": True,
@@ -274,6 +286,8 @@ def send_message(chat_id):
     except Exception as e:
         print(f"[X] Error sending message: {str(e)}")
         traceback.print_exc()
+        if 'request_start' in locals():
+            log_stage("total_response", request_start, success=False, error=str(e))
         user_message_safe = locals().get('user_message', "N/A")
         return jsonify({
             "success": False,

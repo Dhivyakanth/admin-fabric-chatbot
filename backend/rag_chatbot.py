@@ -5,6 +5,7 @@ os.environ.setdefault("TRANSFORMERS_NO_TF", "1")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
@@ -24,6 +25,176 @@ import calendar
 from datetime import datetime
 from paths import DATA_CSV_PATH, FAISS_INDEX_DIR, ENV_FILE_PATH
 load_dotenv(ENV_FILE_PATH)
+
+MODEL_TIMEOUT_SECONDS = int(os.getenv("MODEL_TIMEOUT_SECONDS", "45"))
+SKIP_STARTUP_DATA_REFRESH = os.getenv("SKIP_STARTUP_DATA_REFRESH", "false").lower() == "true"
+
+_INITIALIZED = False
+numerical_analyzer = None
+smart_api = None
+retriever = None
+qa_chain = None
+cache = CacheManager()
+
+
+def _log_perf(stage, start_time, **extra):
+    elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
+    payload = {"event": "rag_stage", "stage": stage, "elapsed_ms": elapsed_ms}
+    if extra:
+        payload.update(extra)
+    print(json.dumps(payload, default=str))
+
+
+def _is_meaningful_response(value):
+    if value is None:
+        return False
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return False
+        weak_patterns = [
+            "please specify",
+            "cannot determine",
+            "no records found",
+            "no specific",
+            "not found in query"
+        ]
+        return not any(p in stripped.lower() for p in weak_patterns)
+    return True
+
+
+def _ensure_api_key():
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        print("[X] Error: GEMINI_API_KEY not found in environment variables.")
+        print("Please add your Gemini API key to the .env file:")
+        print("GEMINI_API_KEY=your_actual_api_key_here")
+        print("\nYou can get an API key from: https://makersuite.google.com/app/apikey")
+        return None
+    # Backward compatibility for libraries expecting GOOGLE_API_KEY.
+    os.environ.setdefault("GOOGLE_API_KEY", api_key)
+    return api_key
+
+
+def _initialize_rag_components():
+    global _INITIALIZED, numerical_analyzer, smart_api, retriever, qa_chain
+
+    if _INITIALIZED:
+        return
+
+    init_start = time.perf_counter()
+    if _ensure_api_key() is None:
+        raise RuntimeError("Missing GEMINI_API_KEY/GOOGLE_API_KEY")
+
+    if not SKIP_STARTUP_DATA_REFRESH:
+        refresh_start = time.perf_counter()
+        try:
+            update_csv()
+        except Exception as e:
+            print(f"[!] Startup data refresh failed, continuing with cached CSV: {e}")
+        _log_perf("startup_data_refresh", refresh_start)
+
+    data = pd.read_csv(DATA_CSV_PATH)
+    text_data = "\n".join([str(row) for row in data.to_dict(orient="records")])
+
+    print("Initializing AI-powered numerical analyzer...")
+    try:
+        numerical_analyzer = create_numerical_analyzer(str(DATA_CSV_PATH))
+        print("[OK] Numerical analyzer ready with AI models!")
+    except Exception as e:
+        print(f"[!] Numerical analyzer initialization failed: {e}")
+        numerical_analyzer = None
+
+    print("[>] Initializing Smart API Handler...")
+    try:
+        smart_api = create_smart_api_handler(str(DATA_CSV_PATH))
+        print("[OK] Smart API Handler ready with routing capabilities!")
+    except Exception as e:
+        print(f"[!] Smart API Handler initialization failed: {e}")
+        smart_api = None
+
+    splitter = CharacterTextSplitter(chunk_size=1500, chunk_overlap=300)
+    docs = splitter.create_documents([text_data])
+
+    embedding_cache_path = str(FAISS_INDEX_DIR)
+    try:
+        current_data_hash = get_data_hash(str(DATA_CSV_PATH))
+        print(f"[#] Current data hash: {current_data_hash}")
+
+        if os.path.exists(embedding_cache_path) and os.path.isdir(embedding_cache_path):
+            metadata = load_embedding_metadata(embedding_cache_path)
+            if metadata and 'data_hash' in metadata and current_data_hash == metadata['data_hash']:
+                print("[#] Loading embeddings from cache (data unchanged)...")
+                embedding = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+                vectordb = FAISS.load_local(embedding_cache_path, embedding, allow_dangerous_deserialization=True)
+                print("[OK] Embeddings loaded from cache!")
+            else:
+                print("[#] Creating/refreshing embeddings cache...")
+                embedding = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+                vectordb = FAISS.from_documents(docs, embedding)
+                os.makedirs(embedding_cache_path, exist_ok=True)
+                vectordb.save_local(embedding_cache_path)
+                save_embedding_metadata(embedding_cache_path, current_data_hash)
+                print("[OK] Embeddings created and cached!")
+        else:
+            print("[#] No cache found, creating new embeddings...")
+            embedding = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+            vectordb = FAISS.from_documents(docs, embedding)
+            os.makedirs(embedding_cache_path, exist_ok=True)
+            vectordb.save_local(embedding_cache_path)
+            save_embedding_metadata(embedding_cache_path, current_data_hash)
+            print("[OK] Embeddings created and cached!")
+    except Exception as e:
+        raise RuntimeError(
+            "Could not initialize local embeddings. Install sentence-transformers and verify FAISS cache"
+        ) from e
+
+    retriever = vectordb.as_retriever()
+    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
+    qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever)
+    _INITIALIZED = True
+    _log_perf("startup_initialize_rag", init_start)
+
+
+def _build_context_prompt(question, chat_history=None, explain_prefix=None):
+    if chat_history and len(chat_history) > 0:
+        history_text = "\n"
+        for msg in chat_history:
+            role = msg.get("role", "")
+            content = msg.get("parts", [{}])[0].get("text", "") if msg.get("parts") else ""
+            if role and content:
+                history_text += f"{role}: {content}\n"
+        base = f"Chat History:\n{history_text}\n"
+    else:
+        base = ""
+
+    if explain_prefix:
+        return f"{base}{explain_prefix}: {question}"
+    return f"{base}Question: {question}"
+
+
+def _invoke_qa_with_timeout(query, stage="gemini_call"):
+    invoke_start = time.perf_counter()
+
+    def _invoke():
+        return qa_chain.invoke({"query": query})
+
+    try:
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            result = executor.submit(_invoke).result(timeout=MODEL_TIMEOUT_SECONDS)
+        _log_perf(stage, invoke_start, timeout=False)
+        return result
+    except FuturesTimeoutError:
+        _log_perf(stage, invoke_start, timeout=True)
+        return {
+            "result": (
+                "The AI analysis is taking longer than expected. "
+                "Please try a narrower question or retry in a moment."
+            )
+        }
+    except Exception as e:
+        _log_perf(stage, invoke_start, timeout=False, error=str(e))
+        raise
 def get_data_hash(csv_path):
     """
     Generate a hash of the CSV data to detect changes.
@@ -119,13 +290,8 @@ def strip_summary_sections(response_text):
     result = re.sub(r'\n\s*\n', '\n\n', result)
     return result.strip()
 
-# Check if Google API key is set
-if not os.getenv("GOOGLE_API_KEY"):
-    print("[X] Error: GOOGLE_API_KEY not found in environment variables.")
-    print("Please add your Google API key to the .env file:")
-    print("GOOGLE_API_KEY=your_actual_api_key_here")
-    print("\nYou can get an API key from: https://makersuite.google.com/app/apikey")
-    exit(1)
+# Keep backward compatibility while preferring GEMINI_API_KEY.
+_ensure_api_key()
 
 def detect_numerical_query(question):
     """Detect if the question requires numerical analysis"""
@@ -138,107 +304,11 @@ def detect_numerical_query(question):
     return any(keyword in question.lower() for keyword in numerical_keywords)
 
 
-update_csv()
-data = pd.read_csv(DATA_CSV_PATH)
-
-
-text_data = "\n".join([str(row) for row in data.to_dict(orient="records")])
-
-# Initialize AI-powered numerical analyzer
-print("Initializing AI-powered numerical analyzer...")
-try:
-    numerical_analyzer = create_numerical_analyzer(str(DATA_CSV_PATH))
-    print("[OK] Numerical analyzer ready with AI models!")
-except Exception as e:
-    print(f"[!] Numerical analyzer initialization failed: {e}")
-    numerical_analyzer = None
-
-# Initialize Smart API Handler
-print("[>] Initializing Smart API Handler...")
-try:
-    smart_api = create_smart_api_handler(str(DATA_CSV_PATH))
-    print("[OK] Smart API Handler ready with routing capabilities!")
-except Exception as e:
-    print(f"[!] Smart API Handler initialization failed: {e}")
-    smart_api = None
-
-# --- Chunk text and create embeddings
-splitter = CharacterTextSplitter(chunk_size=1500, chunk_overlap=300)
-docs = splitter.create_documents([text_data])
-
-# Use local embedding model to avoid rate limits with Google API
-# Also implement caching to avoid recreating embeddings every time
-import os
-embedding_cache_path = str(FAISS_INDEX_DIR)
-
-try:
-    # Generate hash of current data
-    current_data_hash = get_data_hash(str(DATA_CSV_PATH))
-    print(f"[#] Current data hash: {current_data_hash}")
-    
-    # Check if we have cached embeddings and metadata
-    if os.path.exists(embedding_cache_path) and os.path.isdir(embedding_cache_path):
-        # Load metadata to check if data has changed
-        metadata = load_embedding_metadata(embedding_cache_path)
-        
-        if metadata and 'data_hash' in metadata:
-            cached_data_hash = metadata['data_hash']
-            print(f"[#] Cached data hash: {cached_data_hash}")
-            
-            # Compare hashes to determine if data has changed
-            if current_data_hash == cached_data_hash:
-                print("[#] Loading embeddings from cache (data unchanged)...")
-                embedding = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-                vectordb = FAISS.load_local(embedding_cache_path, embedding, allow_dangerous_deserialization=True)
-                print("[OK] Embeddings loaded from cache!")
-            else:
-                print("[#] Data has changed, creating new embeddings...")
-                embedding = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-                vectordb = FAISS.from_documents(docs, embedding)
-                # Save embeddings to cache for next time
-                os.makedirs(embedding_cache_path, exist_ok=True)
-                vectordb.save_local(embedding_cache_path)
-                # Save metadata with new hash
-                save_embedding_metadata(embedding_cache_path, current_data_hash)
-                print("[OK] New embeddings created and cached!")
-        else:
-            # No metadata or no hash in metadata, recreate embeddings
-            print("[#] No metadata found, creating new embeddings...")
-            embedding = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-            vectordb = FAISS.from_documents(docs, embedding)
-            # Save embeddings to cache for next time
-            os.makedirs(embedding_cache_path, exist_ok=True)
-            vectordb.save_local(embedding_cache_path)
-            # Save metadata with new hash
-            save_embedding_metadata(embedding_cache_path, current_data_hash)
-            print("[OK] Embeddings created and cached!")
-    else:
-        # No cache exists, create new embeddings
-        print("[#] No cache found, creating new embeddings...")
-        embedding = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-        vectordb = FAISS.from_documents(docs, embedding)
-        # Save embeddings to cache for next time
-        os.makedirs(embedding_cache_path, exist_ok=True)
-        vectordb.save_local(embedding_cache_path)
-        # Save metadata with new hash
-        save_embedding_metadata(embedding_cache_path, current_data_hash)
-        print("[OK] Embeddings created and cached!")
-except Exception as e:
-    print(f"[X] Error with local embeddings: {e}")
-    print("[X] Critical Error: Could not initialize local embeddings. Please ensure sentence_transformers is installed: pip install sentence-transformers")
-    print("[X] The application will now exit to prevent using Google API embeddings which may hit rate limits")
-    exit(1)
-
-
-# --- Retriever
-retriever = vectordb.as_retriever()
-
-# --- RAG Chain
-llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
-qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever)
-
-# --- Cache
-cache = CacheManager()
+if not SKIP_STARTUP_DATA_REFRESH:
+    try:
+        _initialize_rag_components()
+    except Exception as e:
+        print(f"[!] Deferred RAG initialization to first request: {e}")
 
 def get_top_documents(question, k=3):
     """Retrieve top k documents for the question (for debugging/inspection)"""
@@ -473,6 +543,8 @@ def replace_current_month_in_question(question: str) -> str:
     return re.sub(r'current month', month_name, question, flags=re.IGNORECASE)
 
 def enhanced_chatbot_ask(question, session_id="default", chat_history=None):
+    _initialize_rag_components()
+    total_start = time.perf_counter()
     # Always replace 'current month' with actual month name
     question = replace_current_month_in_question(question)
 
@@ -500,21 +572,7 @@ def enhanced_chatbot_ask(question, session_id="default", chat_history=None):
         if 'customer' in question_lower and ('most order' in question_lower or 'most number of order' in question_lower):
             most_orders_customer = df_valid['customerName'].value_counts().idxmax()
             order_count = df_valid['customerName'].value_counts().max()
-            result = f"{most_orders_customer} has placed the most orders: {order_count}"
-            # Build context with chat history if available
-            if chat_history and len(chat_history) > 0:
-                # Format chat history for context
-                history_text = "\n"
-                for msg in chat_history:
-                    role = msg.get("role", "")
-                    content = msg.get("parts", [{}])[0].get("text", "") if msg.get("parts") else ""
-                    if role and content:
-                        history_text += f"{role}: {content}\n"
-                context_prompt = f"Chat History:\n{history_text}\nExplain: {result}"
-            else:
-                context_prompt = f"Explain: {result}"
-            gemini_explanation = qa_chain.invoke({"query": context_prompt})
-            return extract_rag_answer(gemini_explanation)
+            return f"{most_orders_customer} has placed the most orders: {order_count}"
         # Handle specific agent queries without grouping
         if 'agent' in question_lower and ('confirmed orders' in question_lower or 'declined orders' in question_lower or 'pending orders' in question_lower):
             # Check if a specific agent is mentioned in the question
@@ -540,40 +598,12 @@ def enhanced_chatbot_ask(question, session_id="default", chat_history=None):
                         status_text = 'pending'
                     else:
                         status_text = 'total'
-                    result = f"{agent.title()} has {order_count} {status_text} orders."
-                    # Build context with chat history if available
-                    if chat_history and len(chat_history) > 0:
-                        # Format chat history for context
-                        history_text = "\n"
-                        for msg in chat_history:
-                            role = msg.get("role", "")
-                            content = msg.get("parts", [{}])[0].get("text", "") if msg.get("parts") else ""
-                            if role and content:
-                                history_text += f"{role}: {content}\n"
-                        context_prompt = f"Chat History:\n{history_text}\nExplain: {result}"
-                    else:
-                        context_prompt = f"Explain: {result}"
-                    gemini_explanation = qa_chain.invoke({"query": context_prompt})
-                    return extract_rag_answer(gemini_explanation)
+                    return f"{agent.title()} has {order_count} {status_text} orders."
         
         if 'agent' in question_lower and ('most order' in question_lower or 'most number of order' in question_lower):
             most_orders_agent = df_valid['agentName'].value_counts().idxmax()
             order_count = df_valid['agentName'].value_counts().max()
-            result = f"{most_orders_agent} has handled the most orders: {order_count}"
-            # Build context with chat history if available
-            if chat_history and len(chat_history) > 0:
-                # Format chat history for context
-                history_text = "\n"
-                for msg in chat_history:
-                    role = msg.get("role", "")
-                    content = msg.get("parts", [{}])[0].get("text", "") if msg.get("parts") else ""
-                    if role and content:
-                        history_text += f"{role}: {content}\n"
-                context_prompt = f"Chat History:\n{history_text}\nExplain: {result}"
-            else:
-                context_prompt = f"Explain: {result}"
-            gemini_explanation = qa_chain.invoke({"query": context_prompt})
-            return extract_rag_answer(gemini_explanation)
+            return f"{most_orders_agent} has handled the most orders: {order_count}"
         if 'weave' in question_lower and ('most order' in question_lower or 'most number of order' in question_lower):
             most_orders_weave = df_valid['weave'].value_counts().idxmax()
             order_count = df_valid['weave'].value_counts().max()
@@ -590,40 +620,12 @@ def enhanced_chatbot_ask(question, session_id="default", chat_history=None):
             df_valid['quantity_num'] = pd.to_numeric(df_valid['quantity'], errors='coerce')
             result_customer = df_valid.groupby('customerName')['quantity_num'].sum().idxmax()
             result_quantity = df_valid.groupby('customerName')['quantity_num'].sum().max()
-            result = f"{result_customer} has ordered the highest quantity: {int(result_quantity)} units"
-            # Build context with chat history if available
-            if chat_history and len(chat_history) > 0:
-                # Format chat history for context
-                history_text = "\n"
-                for msg in chat_history:
-                    role = msg.get("role", "")
-                    content = msg.get("parts", [{}])[0].get("text", "") if msg.get("parts") else ""
-                    if role and content:
-                        history_text += f"{role}: {content}\n"
-                context_prompt = f"Chat History:\n{history_text}\nExplain: {result}"
-            else:
-                context_prompt = f"Explain: {result}"
-            gemini_explanation = qa_chain.invoke({"query": context_prompt})
-            return extract_rag_answer(gemini_explanation)
+            return f"{result_customer} has ordered the highest quantity: {int(result_quantity)} units"
         if 'customer' in question_lower and ('highest revenue' in question_lower or 'most revenue' in question_lower):
             df_valid['revenue'] = pd.to_numeric(df_valid['quantity'], errors='coerce') * pd.to_numeric(df_valid['rate'], errors='coerce')
             result_customer = df_valid.groupby('customerName')['revenue'].sum().idxmax()
             result_revenue = df_valid.groupby('customerName')['revenue'].sum().max()
-            result = f"{result_customer} has generated the highest revenue: ${result_revenue:,.2f}"
-            # Build context with chat history if available
-            if chat_history and len(chat_history) > 0:
-                # Format chat history for context
-                history_text = "\n"
-                for msg in chat_history:
-                    role = msg.get("role", "")
-                    content = msg.get("parts", [{}])[0].get("text", "") if msg.get("parts") else ""
-                    if role and content:
-                        history_text += f"{role}: {content}\n"
-                context_prompt = f"Chat History:\n{history_text}\nExplain: {result}"
-            else:
-                context_prompt = f"Explain: {result}"
-            gemini_explanation = qa_chain.invoke({"query": context_prompt})
-            return extract_rag_answer(gemini_explanation)
+            return f"{result_customer} has generated the highest revenue: ${result_revenue:,.2f}"
         # Revenue calculation queries
         if 'revenue' in question_lower or 'purchased' in question_lower:
             # Check for agent-specific revenue query - expanded pattern matching
@@ -787,6 +789,7 @@ def enhanced_chatbot_ask(question, session_id="default", chat_history=None):
     # Check cache for previous answer
     cached_answer = cache.get_context(question, session_id=session_id)
     if cached_answer:
+        _log_perf("cache_hit", total_start)
         return cached_answer
     """Enhanced chatbot with Smart API routing and AI-powered analysis"""
     corrected_question = question  # Use raw question
@@ -870,7 +873,13 @@ def enhanced_chatbot_ask(question, session_id="default", chat_history=None):
                         date_df['revenue'] = date_df['quantity_num'] * date_df['rate_num']
                         date_revenue = date_df['revenue'].sum()
                         return f"Revenue for date {date_str}: ${date_revenue:,.2f}"
+            smart_start = time.perf_counter()
             smart_response = smart_api.process_query(corrected_question)
+            _log_perf("smart_route", smart_start)
+            if _is_meaningful_response(smart_response):
+                cache.update_context(corrected_question, smart_response, session_id=session_id)
+                _log_perf("smart_route_fast_return", total_start)
+                return smart_response
             # Most sold quality by quantity
             if "most sold quality" in corrected_question.lower():
                 # Use pandas for correct ranking and answer
@@ -1014,10 +1023,11 @@ def enhanced_chatbot_ask(question, session_id="default", chat_history=None):
                     if role and content:
                         history_text += f"{role}: {content}\n"
                 context_prompt = f"Chat History:\n{history_text}\n{context_prompt}"
-            rag_response = qa_chain.invoke({"query": context_prompt})
+            rag_response = _invoke_qa_with_timeout(context_prompt, stage="gemini_call")
             rag_answer = extract_rag_answer(rag_response)
             combined_response = f"{rag_answer}"
             cache.update_context(corrected_question, combined_response)
+            _log_perf("total_response", total_start)
             return combined_response
         except Exception as e:
             print(f"⚠️ Smart API failed: {e}")
@@ -1027,6 +1037,7 @@ def enhanced_chatbot_ask(question, session_id="default", chat_history=None):
 
 def fallback_analysis(question, session_id="default", chat_history=None):
     """Fallback to original enhanced analysis if Smart API fails"""
+    _initialize_rag_components()
     is_numerical = detect_numerical_query(question)
     if is_numerical and numerical_analyzer:
         print("[#] [AI Numerical Analysis Mode Activated]")
@@ -1044,7 +1055,7 @@ def fallback_analysis(question, session_id="default", chat_history=None):
                 context_prompt = f"Chat History:\n{history_text}\nQuestion: {question}"
             else:
                 context_prompt = f"Question: {question}"
-            rag_response = qa_chain.invoke({"query": context_prompt})
+            rag_response = _invoke_qa_with_timeout(context_prompt, stage="gemini_call")
             rag_answer = extract_rag_answer(rag_response)
             combined_response = f"{ai_analysis}\n\n{rag_answer}"
             cache.update_context(question, combined_response, session_id=session_id)
@@ -1057,6 +1068,7 @@ def fallback_analysis(question, session_id="default", chat_history=None):
 
 def standard_chatbot_ask(question, session_id="default", chat_history=None):
     """Standard RAG chatbot function"""
+    _initialize_rag_components()
     # Build context with chat history if available
     if chat_history and len(chat_history) > 0:
         # Format chat history for context
@@ -1069,7 +1081,7 @@ def standard_chatbot_ask(question, session_id="default", chat_history=None):
         context_prompt = f"Chat History:\n{history_text}\nQuestion: {question}"
     else:
         context_prompt = f"Question: {question}"
-    answer = qa_chain.invoke({"query": context_prompt})
+    answer = _invoke_qa_with_timeout(context_prompt, stage="gemini_call")
     rag_answer = extract_rag_answer(answer)
     cache.update_context(question, rag_answer, session_id=session_id)
     return rag_answer
